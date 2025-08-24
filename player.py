@@ -2,14 +2,9 @@ import vlc
 import threading
 
 class MusicPlayer:
-    """
-    Handles music playback using the VLC library.
-    """
-    def __init__(self, app, on_song_end_callback):
-        self.app = app
+    def __init__(self, on_song_end_callback):
         self.on_song_end_callback = on_song_end_callback
         
-        # We need to set up the instance with arguments to control caching.
         self.vlc_instance = vlc.Instance("--network-caching=8000", "--aout=directsound")
         
         self.vlc_player = self.vlc_instance.media_player_new()
@@ -21,8 +16,7 @@ class MusicPlayer:
         self.event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end)
         
     def _on_media_end(self, event):
-        # Schedule the callback to run on the main thread
-        self.app.after(0, self.on_song_end_callback)
+        self.on_song_end_callback()
 
     def play_song(self, song_info):
         """Plays a song given its dictionary (which contains the 'url')."""
@@ -55,10 +49,13 @@ class MusicPlayer:
 
     def set_pos(self, pos_ms):
         self.vlc_player.set_time(int(pos_ms))
+        
+    def get_duration(self):
+        return self.vlc_player.get_length()
 
     def set_volume(self, volume):
         self.vlc_player.audio_set_volume(int(volume * 100))
         
-    @property
-    def duration(self):
-        return self.vlc_player.get_length()
+    def get_busy(self):
+        state = self.vlc_player.get_state()
+        return state == vlc.State.Playing or state == vlc.State.Buffering

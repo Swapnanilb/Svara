@@ -26,19 +26,16 @@ class MusicPlayerApp(ctk.CTk):
 
         self.playlist_manager = PlaylistManager()
         self.yt_streamer = YouTubeStreamer(self.on_playlist_info_fetched, self.on_single_song_info_fetched)
-        self.music_player = MusicPlayer(self, self.play_next_song)
+        self.music_player = MusicPlayer(self.play_next_song)
         self.current_song_index = -1
         self.current_playlist_id = None
         self.is_shuffled = False
         self.is_repeated = False
-        self.shuffled_indices = []
-        self.current_shuffled_index = -1
         self.current_song_info = None
         self.progress_thread = None
         self.stop_thread = threading.Event()
         self.last_volume = 0.5
         self.is_seeking = False
-        self.sync_mode = False
         
         self.loading_screen = None
         self.playlist_card_buttons = {}
@@ -94,20 +91,16 @@ class MusicPlayerApp(ctk.CTk):
         if not songs:
             return
 
-        next_index_to_play = -1
         if self.is_repeated:
-            next_index_to_play = self.current_song_index
+            next_index = self.current_song_index
         elif self.is_shuffled:
-            if not self.shuffled_indices:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-            
-            self.current_shuffled_index = (self.current_shuffled_index + 1) % len(self.shuffled_indices)
-            next_index_to_play = self.shuffled_indices[self.current_shuffled_index]
+            next_index = random.randint(0, len(songs) - 1)
+            while next_index == self.current_song_index and len(songs) > 1:
+                next_index = random.randint(0, len(songs) - 1)
         else:
-            next_index_to_play = (self.current_song_index + 1) % len(songs)
+            next_index = (self.current_song_index + 1) % len(songs)
         
-        self.play_song_by_index(next_index_to_play)
+        self.play_song_by_index(next_index)
         
     def play_song_by_index(self, index):
         if not self.current_playlist_id:
@@ -132,22 +125,6 @@ class MusicPlayerApp(ctk.CTk):
                 self.progress_thread.start()
             
             self.update_play_pause_button()
-            
-            # Highlight the current song in the tracklist
-            # Get the list of all items in the treeview
-            items = self.playlist_tree.get_children()
-            if items:
-                # Clear any existing selection
-                self.playlist_tree.selection_remove(self.playlist_tree.selection())
-                
-                # Get the item ID of the song at the current index
-                song_item_id = items[self.current_song_index]
-                
-                # Set the selection to the new item
-                self.playlist_tree.selection_set(song_item_id)
-                
-                # Make sure the selected item is visible
-                self.playlist_tree.see(song_item_id)
         else:
             self.music_player.stop()
             self.reset_now_playing_view()
@@ -156,26 +133,37 @@ class MusicPlayerApp(ctk.CTk):
         self.after(0, lambda: self._update_ui_with_new_playlist(playlist_info))
 
     def _update_ui_with_new_playlist(self, playlist_info):
-        if playlist_info:
-            if self.sync_mode:
-                # Handle synchronization by replacing the entire playlist
-                self.playlist_manager.update_playlist_songs(self.current_playlist_id, playlist_info['entries'])
-                self.display_playlist_songs(self.current_playlist_id)
-                messagebox.showinfo("Sync Complete", "Playlist has been successfully synced with YouTube.")
-                self.sync_mode = False
-            else:
-                # Handle initial playlist creation
-                playlist_name = playlist_info.get('title', 'Unknown Playlist')
-                songs = playlist_info.get('entries', [])
-                thumbnail = playlist_info.get('thumbnail_url', None)
-                source_url = playlist_info.get('original_url')
-                
-                playlist_id = self.playlist_manager.add_new_playlist(playlist_name, songs, source_url)
-                self.create_playlist_card(playlist_name, playlist_id, thumbnail)
-                self.display_playlist_songs(playlist_id)
-        
         self.hide_loading_screen()
-        
+        if not playlist_info:
+            messagebox.showerror("Error", "Could not fetch playlist info.")
+            return
+
+        playlist_name = playlist_info.get('title', 'Unknown Playlist')
+        songs_to_add = playlist_info.get('entries', [])
+        thumbnail = playlist_info.get('thumbnail_url', None)
+        youtube_id = playlist_info.get('youtube_id', None)
+
+        existing_playlist_id = self.playlist_manager.find_playlist_by_youtube_id(youtube_id)
+
+        if existing_playlist_id:
+            new_songs_added = self.playlist_manager.add_new_songs_to_existing_playlist(
+                existing_playlist_id, songs_to_add
+            )
+            
+            if new_songs_added > 0:
+                messagebox.showinfo("Playlist Updated", f"Playlist '{playlist_name}' updated! {new_songs_added} new songs added.")
+            else:
+                messagebox.showinfo("Playlist Up to Date", f"Playlist '{playlist_name}' is already up to date.")
+
+            # Refresh the UI for the existing playlist
+            self.display_playlist_songs(existing_playlist_id)
+        else:
+            # Create a brand new playlist
+            new_playlist_id = self.playlist_manager.add_new_playlist(playlist_name, songs_to_add, thumbnail, youtube_id)
+            self.create_playlist_card(playlist_name, new_playlist_id, thumbnail)
+            self.display_playlist_songs(new_playlist_id)
+            messagebox.showinfo("New Playlist", f"Playlist '{playlist_name}' created successfully!")
+            
     def on_single_song_info_fetched(self, full_song_info):
         self.after(0, lambda: self._handle_single_song_info(full_song_info))
     
@@ -204,9 +192,9 @@ class MusicPlayerApp(ctk.CTk):
         create_new_frame.pack(fill=tk.X, padx=20, pady=5)
         
         def create_new():
-            name = simpledialog.askstring("New Playlist", "Enter a name for the new playlist:")
+            name = simpledialog.askstring("New Playlist", "Enter a name for the new playlist:", parent=dialog)
             if name:
-                playlist_id = self.playlist_manager.add_new_playlist(name, [song_info], source_url=None)
+                playlist_id = self.playlist_manager.add_new_playlist(name, [song_info], song_info.get('thumbnail_url'))
                 self.create_playlist_card(name, playlist_id, song_info.get('thumbnail_url'))
                 self.display_playlist_songs(playlist_id)
                 dialog.destroy()
@@ -219,13 +207,13 @@ class MusicPlayerApp(ctk.CTk):
             add_to_existing_frame.pack(fill=tk.X, padx=20, pady=5)
             
             playlist_names = [p['name'] for p in playlists.values()]
-            selected_playlist = ctk.StringVar(value=playlist_names[0])
+            selected_playlist_var = ctk.StringVar(value=playlist_names[0])
             
-            option_menu = ctk.CTkOptionMenu(add_to_existing_frame, variable=selected_playlist, values=playlist_names)
+            option_menu = ctk.CTkOptionMenu(add_to_existing_frame, variable=selected_playlist_var, values=playlist_names)
             option_menu.pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
 
             def add_to_existing():
-                selected_name = selected_playlist.get()
+                selected_name = selected_playlist_var.get()
                 selected_id = next(id for id, p in playlists.items() if p['name'] == selected_name)
                 
                 self.playlist_manager.add_song_to_playlist(selected_id, song_info)
@@ -250,24 +238,20 @@ class MusicPlayerApp(ctk.CTk):
         if not self.is_seeking:
             self.progress_bar.set(pos_sec)
         self.elapsed_time_label.configure(text=time.strftime('%M:%S', time.gmtime(pos_sec)))
-        
-    def _handle_progress_change(self, value):
-        # This function is called by the CTkSlider's command.
-        # It handles both dragging and releasing.
-        pos_sec = float(value)
-        self.elapsed_time_label.configure(text=time.strftime('%M:%S', time.gmtime(pos_sec)))
-        
-        if not self.is_seeking and self.music_player.is_playing:
-            self.music_player.set_pos(pos_sec * 1000)
 
-    def on_progress_press(self, event=None):
+    def on_progress_press(self, event):
         self.is_seeking = True
 
-    def on_progress_release(self, event=None):
-        self.is_seeking = False
+    def on_progress_release(self, event):
+        if self.music_player.is_playing:
+            self.is_seeking = False
+            pos_sec = self.progress_bar.get()
+            self.music_player.set_pos(pos_sec * 1000)
+            
+    def on_progress_drag(self, value):
+        self.elapsed_time_label.configure(text=time.strftime('%M:%S', time.gmtime(float(value))))
 
     def load_initial_playlist(self):
-        # This is now handled by display_playlist_songs
         pass
     
     def load_playlist_cards(self):
@@ -297,14 +281,13 @@ class MusicPlayerApp(ctk.CTk):
         else:
             img = ctk.CTkImage(light_image=Image.new("RGB", (100, 100), "black"), size=(100, 100))
 
-        # We'll use a button to make the entire card clickable
         card_button = ctk.CTkButton(card_frame, 
-                                     text=name,
-                                     image=img,
-                                     compound="top",
-                                     hover_color="#1DB954",
-                                     fg_color="transparent",
-                                     command=lambda p_id=playlist_id: self.display_playlist_songs(p_id))
+                                  text=name,
+                                  image=img,
+                                  compound="top",
+                                  hover_color="#1DB954",
+                                  fg_color="transparent",
+                                  command=lambda p_id=playlist_id: self.display_playlist_songs(p_id))
         
         card_button.pack(padx=10, pady=10, expand=True, fill=tk.BOTH)
         card_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -323,17 +306,10 @@ class MusicPlayerApp(ctk.CTk):
         
         for p_id, button in self.playlist_card_buttons.items():
             button.configure(fg_color="#1DB954" if p_id == playlist_id else "transparent")
-            
-        # Re-initialize shuffled list when a new playlist is displayed
-        if self.is_shuffled:
-            self.shuffled_indices = list(range(len(songs)))
-            random.shuffle(self.shuffled_indices)
-            self.current_shuffled_index = -1
-            
 
     def filter_songs(self, event=None):
         search_term = self.search_bar.get().lower()
-        if search_term == "Search Library...":
+        if search_term == "Search Playlist...":
             search_term = ""
 
         songs = self.playlist_manager.get_songs(self.current_playlist_id)
@@ -365,34 +341,9 @@ class MusicPlayerApp(ctk.CTk):
             messagebox.showerror("Error", "Please enter a YouTube link.")
             return
 
-        # Check if the playlist already exists before fetching the data
-        existing_playlist_id = self.playlist_manager.get_playlist_by_url(url)
-        if existing_playlist_id:
-            messagebox.showinfo("Playlist Already Exists", "This playlist is already in your library.")
-            self.display_playlist_songs(existing_playlist_id)
-            self.link_entry.delete(0, tk.END)
-            return
-
         self.show_loading_screen()
         self.yt_streamer.get_playlist_info(url)
         self.link_entry.delete(0, tk.END)
-
-    def sync_playlist(self):
-        if not self.current_playlist_id:
-            messagebox.showinfo("Sync Error", "Please select a playlist to sync first.")
-            return
-            
-        playlists = self.playlist_manager.get_all_playlists()
-        playlist_data = playlists.get(self.current_playlist_id, {})
-        url = playlist_data.get('source_url')
-        
-        if not url:
-            messagebox.showinfo("Sync Error", "This playlist does not have a source YouTube URL.")
-            return
-
-        self.sync_mode = True
-        self.show_loading_screen()
-        self.yt_streamer.get_playlist_info(url)
     
     def show_loading_screen(self):
         if self.loading_screen:
@@ -407,7 +358,7 @@ class MusicPlayerApp(ctk.CTk):
         y = self.winfo_y() + self.winfo_height() // 2 - 60
         self.loading_screen.geometry(f"+{x}+{y}")
         
-        ctk.CTkLabel(self.loading_screen, text="Loading playlist, please wait...", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(20, 10))
+        ctk.CTkLabel(self.loading_screen, text="Loading, please wait...", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(20, 10))
         
         self.loading_bar = ctk.CTkProgressBar(self.loading_screen, orientation="horizontal", mode="indeterminate", determinate_speed=1)
         self.loading_bar.pack(fill=tk.X, padx=20, pady=10)
@@ -443,40 +394,28 @@ class MusicPlayerApp(ctk.CTk):
         songs = self.playlist_manager.get_songs(self.current_playlist_id)
         if not songs:
             return
-
-        next_index_to_play = -1
-        if self.is_repeated:
-            next_index_to_play = self.current_song_index
-        elif self.is_shuffled:
-            if not self.shuffled_indices:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-            
-            self.current_shuffled_index = (self.current_shuffled_index + 1) % len(self.shuffled_indices)
-            next_index_to_play = self.shuffled_indices[self.current_shuffled_index]
-        else:
-            next_index_to_play = (self.current_song_index + 1) % len(songs)
         
-        self.play_song_by_index(next_index_to_play)
+        if self.is_shuffled:
+            next_index = random.randint(0, len(songs) - 1)
+        else:
+            next_index = (self.current_song_index + 1) % len(songs)
+        
+        self.play_song_by_index(next_index)
 
     def prev_song(self):
         songs = self.playlist_manager.get_songs(self.current_playlist_id)
         if not songs:
             return
-
-        if self.is_repeated:
-            next_index_to_play = self.current_song_index
-        elif self.is_shuffled:
-            if not self.shuffled_indices:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-            
-            self.current_shuffled_index = (self.current_shuffled_index - 1 + len(self.shuffled_indices)) % len(self.shuffled_indices)
-            next_index_to_play = self.shuffled_indices[self.current_shuffled_index]
+        
+        if self.is_shuffled:
+            prev_index = random.randint(0, len(songs) - 1)
         else:
-            next_index_to_play = (self.current_song_index - 1 + len(songs)) % len(songs)
+            if self.current_song_index == 0:
+                prev_index = len(songs) - 1
+            else:
+                prev_index = self.current_song_index - 1
             
-        self.play_song_by_index(next_index_to_play)
+        self.play_song_by_index(prev_index)
     
     def update_play_pause_button(self):
         if self.music_player.is_playing and not self.music_player.is_paused:
@@ -486,16 +425,6 @@ class MusicPlayerApp(ctk.CTk):
 
     def toggle_shuffle(self):
         self.is_shuffled = not self.is_shuffled
-        if self.is_shuffled:
-            songs = self.playlist_manager.get_songs(self.current_playlist_id)
-            if songs:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-                self.current_shuffled_index = -1
-        else:
-            self.shuffled_indices = []
-            self.current_shuffled_index = -1
-
         if self.shuffle_on_img and self.shuffle_off_img:
             image = self.shuffle_on_img if self.is_shuffled else self.shuffle_off_img
             self.shuffle_button.configure(image=image, text="")
@@ -634,11 +563,6 @@ class MusicPlayerApp(ctk.CTk):
         self.search_bar = ctk.CTkEntry(parent_frame, placeholder_text="Search Playlist...")
         self.search_bar.pack(fill=ctk.X, padx=10, pady=10)
         self.search_bar.bind("<KeyRelease>", self.filter_songs)
-        
-        # Add sync button
-        sync_button = ctk.CTkButton(parent_frame, text="Sync Playlist", command=self.sync_playlist, fg_color="#1DB954")
-        sync_button.pack(fill=ctk.X, padx=10, pady=5)
-
 
         style = ttk.Style()
         style.theme_use("clam")
@@ -650,8 +574,10 @@ class MusicPlayerApp(ctk.CTk):
         self.playlist_tree.heading("Duration", text="Duration")
         self.playlist_tree.column("Duration", stretch=ctk.NO, width=80)
         self.playlist_tree.pack(fill=ctk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Bindings for playing a song
         self.playlist_tree.bind("<Double-1>", self.play_selected_song)
-        self.playlist_tree.bind("<Return>", self.play_selected_song) # Add this line
+        self.playlist_tree.bind("<Return>", self.play_selected_song)
 
         scrollbar = ttk.Scrollbar(parent_frame, orient="vertical", command=self.playlist_tree.yview)
         scrollbar.pack(side=ctk.RIGHT, fill=ctk.Y, padx=(0, 10))
@@ -675,10 +601,10 @@ class MusicPlayerApp(ctk.CTk):
         self.elapsed_time_label = ctk.CTkLabel(self.progress_bar_frame, text="0:00", font=ctk.CTkFont(size=10))
         self.elapsed_time_label.pack(side=ctk.LEFT)
         
-        self.progress_bar = ctk.CTkSlider(self.progress_bar_frame, from_=0, to=100, command=self._handle_progress_change)
+        self.progress_bar = ctk.CTkSlider(self.progress_bar_frame, from_=0, to=100, command=self.on_progress_drag)
         self.progress_bar.pack(side=ctk.LEFT, fill=ctk.X, expand=True, padx=5)
-        self.progress_bar.bind("<ButtonPress-1>", self.on_progress_press)
         self.progress_bar.bind("<ButtonRelease-1>", self.on_progress_release)
+        self.progress_bar.bind("<ButtonPress-1>", self.on_progress_press)
 
         self.total_time_label = ctk.CTkLabel(self.progress_bar_frame, text="0:00", font=ctk.CTkFont(size=10))
         self.total_time_label.pack(side=ctk.LEFT)
@@ -701,22 +627,22 @@ class MusicPlayerApp(ctk.CTk):
         self.shuffle_button.pack(side=ctk.LEFT, padx=5)
 
         fast_rew_button = ctk.CTkButton(player_controls_frame, image=self.fast_rew_img, text="", command=lambda: self.seek_backward(10), width=40, height=40)
-        fast_rew_button.pack(side=ctk.LEFT, padx=5)
+        fast_rew_button.pack(side=tk.LEFT, padx=5)
 
         prev_button = ctk.CTkButton(player_controls_frame, image=self.prev_img, text="", command=self.prev_song, width=40, height=40)
-        prev_button.pack(side=ctk.LEFT, padx=5)
+        prev_button.pack(side=tk.LEFT, padx=5)
         
         self.play_pause_button = ctk.CTkButton(player_controls_frame, image=self.play_img, text="", command=self.toggle_play_pause, width=40, height=40)
-        self.play_pause_button.pack(side=ctk.LEFT, padx=5)
+        self.play_pause_button.pack(side=tk.LEFT, padx=5)
 
         next_button = ctk.CTkButton(player_controls_frame, image=self.next_img, text="", command=self.next_song, width=40, height=40)
-        next_button.pack(side=ctk.LEFT, padx=5)
+        next_button.pack(side=tk.LEFT, padx=5)
         
         fast_fwd_button = ctk.CTkButton(player_controls_frame, image=self.fast_fwd_img, text="", command=lambda: self.seek_forward(10), width=40, height=40)
-        fast_fwd_button.pack(side=ctk.LEFT, padx=5)
+        fast_fwd_button.pack(side=tk.LEFT, padx=5)
 
         self.repeat_button = ctk.CTkButton(player_controls_frame, image=self.repeat_off_img, text="", command=self.toggle_repeat, width=40, height=40)
-        self.repeat_button.pack(side=ctk.LEFT, padx=5)
+        self.repeat_button.pack(side=tk.LEFT, padx=5)
 
         volume_frame = ctk.CTkFrame(control_frame, fg_color="#282828")
         volume_frame.pack(side=ctk.RIGHT)
