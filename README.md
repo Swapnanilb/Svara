@@ -73,9 +73,9 @@ python main.py
 ```
 
 ### 📦 Dependencies
-* **pygame** or **vlc** — Audio playback
+* **vlc** — Audio playback
 * **yt-dlp** — YouTube streaming support
-* **tkinter** or **PySide6** — User interface
+* **tkinter** — User interface
 * **Pillow** — Image handling
 
 You can install them via requirements.txt:
