@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+myVenv/
+venv/
+.env/
+
+# VSCode settings
+.vscode/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Other cache files
+*.mypy_cache/
+*.pytest_cache/
+*.coverage
+*.tox/
+*.idea/
+
+# If you want to ignore playlists
+playlists.json
