@@ -23,42 +23,17 @@ class PlaylistManager:
         with open(self.filename, 'w') as f:
             json.dump(self.playlists, f, indent=4)
 
-    def add_new_playlist(self, name, songs, thumbnail=None, youtube_id=None):
+    def add_new_playlist(self, name, songs, source_url=None):
+        # The duplicate check has been moved to main.py for efficiency.
+        # This function now assumes the check has already been performed.
         playlist_id = str(uuid.uuid4())
         self.playlists[playlist_id] = {
             "name": name,
-            "thumbnail": thumbnail,
-            "youtube_id": youtube_id,  # Store the YouTube playlist ID
-            "songs": songs
+            "songs": songs,
+            "source_url": source_url
         }
         self.save_playlists()
         return playlist_id
-
-    def find_playlist_by_youtube_id(self, youtube_id):
-        if not youtube_id:
-            return None
-        for playlist_id, playlist_data in self.playlists.items():
-            if playlist_data.get("youtube_id") == youtube_id:
-                return playlist_id
-        return None
-
-    def add_new_songs_to_existing_playlist(self, playlist_id, new_songs):
-        if playlist_id not in self.playlists:
-            return 0
-        
-        existing_songs = self.playlists[playlist_id]['songs']
-        existing_song_ids = {song['id'] for song in existing_songs}
-        
-        new_songs_added_count = 0
-        for song in new_songs:
-            if song['id'] not in existing_song_ids:
-                existing_songs.append(song)
-                new_songs_added_count += 1
-        
-        if new_songs_added_count > 0:
-            self.save_playlists()
-            
-        return new_songs_added_count
 
     def remove_playlist(self, playlist_id):
         if playlist_id in self.playlists:
@@ -76,8 +51,25 @@ class PlaylistManager:
             del self.playlists[playlist_id]['songs'][song_index]
             self.save_playlists()
 
+    def update_playlist_songs(self, playlist_id, new_songs):
+        if playlist_id in self.playlists:
+            self.playlists[playlist_id]['songs'] = new_songs
+            self.save_playlists()
+
     def get_songs(self, playlist_id):
         return self.playlists.get(playlist_id, {}).get('songs', [])
-    
+
     def get_all_playlists(self):
         return self.playlists
+    
+    def get_playlist_by_url(self, source_url):
+        """
+        Returns the playlist ID if a playlist with the given source URL exists, otherwise returns None.
+        """
+        for playlist_id, playlist_data in self.playlists.items():
+            if playlist_data.get("source_url") == source_url:
+                return playlist_id
+        return None
+        
+    def get_playlist_url(self, playlist_id):
+        return self.playlists.get(playlist_id, {}).get('source_url', None)
