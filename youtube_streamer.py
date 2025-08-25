@@ -1,28 +1,24 @@
 import threading
 import yt_dlp as yt
-import os
 import re
 
 class YouTubeStreamer:
     """
     Handles fetching data from YouTube using yt-dlp.
     """
-    
+
     def __init__(self, on_playlist_info_fetched, on_single_song_info_fetched):
         self.on_playlist_info_fetched = on_playlist_info_fetched
         self.on_single_song_info_fetched = on_single_song_info_fetched
         self.ydl_opts = {
             'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
             'quiet': True,
             'no_warnings': True,
-            'extract_flat': 'in_playlist',  # This option is key for fast playlist info retrieval
+            'extract_flat': 'in_playlist',  # keep flat for fast playlist info
+            'nocheckcertificate': True,
+            'ignoreerrors': True,
         }
-        
+
     def get_playlist_info(self, url, existing_ids=None):
         threading.Thread(target=self._fetch_playlist_data, args=(url, existing_ids), daemon=True).start()
 
@@ -38,56 +34,65 @@ class YouTubeStreamer:
         return None
 
     def _fetch_playlist_data(self, url, existing_ids=None):
-        if existing_ids is None:
-            existing_ids = set()
+        ydl_opts = {
+            "quiet": True,
+            "extract_flat": True,  # ✅ Only basic info (no full download of all songs)
+            "skip_download": True
+        }
 
-        try:
-            with yt.YoutubeDL(self.ydl_opts) as ydl:
-                info_dict = ydl.extract_info(url, download=False)
-                
-                if info_dict and 'entries' in info_dict:
-                    new_entries = []
-                    # This loop fetches detailed info only for new songs
-                    for entry in info_dict['entries']:
-                        if entry and 'id' in entry and entry['id'] not in existing_ids:
-                            video_id = entry['id']
-                            print(f"Fetching full info for new song: {video_id}")
-                            full_song_info = self._fetch_single_song_data_sync(f"https://www.youtube.com/watch?v={video_id}")
-                            if full_song_info:
-                                new_entries.append(full_song_info)
-                        else:
-                            print(f"Skipping existing song: {entry.get('id')}")
-                    
-                    # Combine existing playlist data with new entries
-                    playlist_info_with_new_songs = {
-                        "entries": new_entries,
-                        "title": info_dict.get('title'),
-                        "thumbnail_url": info_dict.get('thumbnail'),
-                        "original_url": info_dict.get('original_url')
-                    }
-                    self.on_playlist_info_fetched(playlist_info_with_new_songs)
-                else:
-                    # Handle single video URL which may have no 'entries'
-                    full_song_info = self._fetch_single_song_data_sync(url)
-                    if full_song_info:
-                        self.on_single_song_info_fetched(full_song_info)
+        with yt.YoutubeDL(ydl_opts) as ydl:
+            try:
+                info = ydl.extract_info(url, download=False)
 
-        except yt.DownloadError as e:
-            print(f"Error fetching playlist info: {e}")
-            self.on_playlist_info_fetched(None)
+                playlist_info = {
+                    "title": info.get("title", "Unknown Playlist"),
+                    "original_url": url,
+                    "thumbnail_url": info.get("thumbnails", [{}])[-1].get("url") if info.get("thumbnails") else None,
+                    "entries": []
+                }
+
+                for entry in info.get("entries", []):
+                    if entry and "id" in entry:
+                        playlist_info["entries"].append({
+                            "id": entry.get("id"),
+                            "title": entry.get("title"),
+                            "url": f"https://www.youtube.com/watch?v={entry['id']}",
+                            "thumbnail_url": entry.get("thumbnails", [{}])[-1].get("url") if entry.get("thumbnails") else None,
+                        })
+
+                # ✅ Pass this lightweight info to main
+                self.on_playlist_info_fetched(playlist_info)
+
+            except Exception as e:
+                print(f"Error fetching playlist info: {e}")
+                self.on_playlist_info_fetched(None)
+
+    def _fetch_single_song_data(self, url):
+        """Fetch info async for adding single songs."""
+        full_song_info = self._fetch_single_song_data_sync(url)
+        if full_song_info:
+            self.on_single_song_info_fetched(full_song_info)
 
     def _fetch_single_song_data_sync(self, url):
+        """
+        Always fetches fresh playable URL for a song (avoids expired links).
+        """
         full_song_info = {}
         try:
-            with yt.YoutubeDL(self.ydl_opts) as ydl:
+            # Force yt-dlp to resolve full info (not flat)
+            opts = self.ydl_opts.copy()
+            opts.pop('extract_flat', None)
+
+            with yt.YoutubeDL(opts) as ydl:
                 info_dict = ydl.extract_info(url, download=False)
-                
+
                 if info_dict:
-                    best_audio = None
-                    for format in info_dict.get('formats', []):
-                        if format.get('ext') in ['m4a', 'webm'] and 'acodec' in format:
-                            best_audio = format
-                            break
+                    # Pick bestaudio
+                    best_audio = next(
+                        (f for f in info_dict.get('formats', [])
+                         if f.get('acodec') != 'none' and f.get('vcodec') == 'none'),
+                        None
+                    )
 
                     if best_audio:
                         full_song_info = {
@@ -95,7 +100,7 @@ class YouTubeStreamer:
                             "id": info_dict.get('id', 'Unknown ID'),
                             "duration": info_dict.get('duration', 0),
                             "thumbnail_url": info_dict.get('thumbnail'),
-                            "url": best_audio.get('url')
+                            "url": best_audio.get('url')  # always fresh link
                         }
                     else:
                         print("No suitable audio format found.")
@@ -104,3 +109,11 @@ class YouTubeStreamer:
             print(f"Error fetching song info: {e}")
 
         return full_song_info
+
+    # ✅ NEW: Public helper for sync/playlist updates
+    def fetch_full_song_info(self, url: str):
+        """
+        Public wrapper to fetch a song's full metadata (sync).
+        Useful for playlist syncing when added/removed songs are detected.
+        """
+        return self._fetch_single_song_data_sync(url)
