@@ -51,14 +51,36 @@ class MusicPlayer:
             self.is_paused = False
 
     def get_pos(self):
-        return self.vlc_player.get_time()
+        """Return current position (ms)."""
+        try:
+            return self.vlc_player.get_time() or 0
+        except Exception as e:
+            print(f"Error getting track pos: {e}")
+            return 0
 
     def set_pos(self, pos_ms):
-        self.vlc_player.set_time(int(pos_ms))
+        """Seek to given position (ms)."""
+        try:
+            self.vlc_player.set_time(int(pos_ms))
+        except Exception as e:
+            print(f"Error setting track pos: {e}")
 
     def set_volume(self, volume):
-        self.vlc_player.audio_set_volume(int(volume * 100))
+        """Set volume (0.0 - 1.0)."""
+        try:
+            self.vlc_player.audio_set_volume(int(volume * 100))
+        except Exception as e:
+            print(f"Error setting volume: {e}")
+    
+    def get_length(self):
+        """Return track length in milliseconds (or 0 if unavailable)."""
+        try:
+            return self.vlc_player.get_length() or 0
+        except Exception as e:
+            print(f"Error getting track length: {e}")
+            return 0
         
     @property
     def duration(self):
-        return self.vlc_player.get_length()
+        """Return duration in ms (shortcut for get_length)."""
+        return self.get_length()
