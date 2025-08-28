@@ -8,6 +8,7 @@ __pycache__/
 myVenv/
 venv/
 .env/
+test/
 
 # VSCode settings
 .vscode/
