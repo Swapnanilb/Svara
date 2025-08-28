@@ -1,3 +1,8 @@
+<p align=center>
+   <img width="512" height="512" alt="Gemini_Generated_Image_794j8d794j8d794j" src="https://github.com/user-attachments/assets/5be11d9f-ddc6-4af2-876d-d2c415de1e77" />
+</p>
+
+
 # 🎵 Svara
 
 A modern and easy-to-use **Python Music Player** with a user-friendly interface.  
