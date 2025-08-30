@@ -1,4 +1,9 @@
-# 🎵 Python Music Player
+<p align=center>
+   <img width="512" height="512" alt="Gemini_Generated_Image_794j8d794j8d794j" src="https://github.com/user-attachments/assets/5be11d9f-ddc6-4af2-876d-d2c415de1e77" />
+</p>
+
+
+# 🎵 Svara
 
 A modern and easy-to-use **Python Music Player** with a user-friendly interface.  
 Supports streaming music from **YouTube playlists and individual song links**, automatically adding loaded songs to your playlist. Perfect for personal use or as a base for further customization.
@@ -21,14 +26,15 @@ Supports streaming music from **YouTube playlists and individual song links**, a
 ```
 MUSIC-PLAYER/
 │── icons/ # Player icons (play, pause, next, etc.)
+|── logo_animation.gif # The splashscreen animation of the logo
 │── myVenv/ # Virtual environment (ignored in Git)
-│── config.py # Configuration file
 │── main.py # Entry point of the app
+│── music_player_logic.py # Logic for the app functions
+│── music_player_ui.py # User interface
 │── player.py # Core player logic
 │── playlist_manager.py # Playlist handling
 │── playlists.json # Saved playlists (ignored in Git)
 │── requirements.txt # Python dependencies
-│── ui.py # User interface
 │── youtube_streamer.py # YouTube streaming support
 │── README.md # Project documentation
 

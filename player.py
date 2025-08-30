@@ -16,6 +16,7 @@ class MusicPlayer:
         self.is_playing = False
         self.is_paused = False
         self.current_song_info = None
+        self.set_volume(0.5)
         
         self.event_manager = self.vlc_player.event_manager()
         self.event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end)
