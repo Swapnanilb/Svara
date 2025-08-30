@@ -25,18 +25,35 @@ Supports streaming music from **YouTube playlists and individual song links**, a
 ## 📂 Project Structure
 ```
 MUSIC-PLAYER/
-│── icons/ # Player icons (play, pause, next, etc.)
-|── logo_animation.gif # The splashscreen animation of the logo
-│── myVenv/ # Virtual environment (ignored in Git)
-│── main.py # Entry point of the app
-│── music_player_logic.py # Logic for the app functions
-│── music_player_ui.py # User interface
-│── player.py # Core player logic
-│── playlist_manager.py # Playlist handling
-│── playlists.json # Saved playlists (ignored in Git)
-│── requirements.txt # Python dependencies
-│── youtube_streamer.py # YouTube streaming support
-│── README.md # Project documentation
+├── components/                 # UI Components
+│   ├── __init__.py
+│   ├── control_panel.py        # Media controls
+│   ├── now_playing_panel.py    # Current song display
+│   ├── playlist_panel.py       # Playlist management panel
+│   └── tracklist_panel.py      # Song list and search
+│── icons/                      # Player icons (play, pause, next, etc.)
+├── logic/                      # Logic Controllers
+│   ├── __init__.py
+│   ├── playback_controller.py  # Playback and audio control
+│   ├── playlist_controller.py  # Playlist management
+│   ├── progress_tracker.py     # Progress tracking  
+│   ├── ui_controller.py        # UI state management
+│   └── youtube_controller.py   # YouTube integration
+|── logo_animation.gif          # The splashscreen animation of the logo
+├── utils/                      # Utilities
+│   ├── __init__.py
+│   ├── icon_loader.py          # Icon management
+│   ├── image_utils.py          # Image processing
+│   └── text_utils.py           # Text processing utilities
+│── main.py                     # Entry point of the app
+│── music_player_logic.py       # Logic for the app functions
+│── music_player_ui.py          # User interface
+│── player.py                   # Core player logic
+│── playlist_manager.py         # Playlist handling
+│── playlists.json              # Saved playlists (ignored in Git)
+│── requirements.txt            # Python dependencies
+│── youtube_streamer.py         # YouTube streaming support
+│── README.md                   # Project documentation
 
 ```
 ---
