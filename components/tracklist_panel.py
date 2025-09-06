@@ -28,14 +28,27 @@ class TracklistPanel(ctk.CTkFrame):
         self.search_bar.pack(fill=tk.X, padx=10, pady=10)
         self.search_bar.bind("<KeyRelease>", self.filter_songs)
         
+        # Button frame for sync and load tracks buttons
+        button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame.pack(fill=tk.X, padx=10, pady=5)
+        
         # Sync button
         sync_button = ctk.CTkButton(
-            self, 
+            button_frame, 
             text="Sync Playlist", 
             command=self.sync_playlist, 
             fg_color="#1DB954"
         )
-        sync_button.pack(fill=tk.X, padx=10, pady=5)
+        sync_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        # Load Tracks button
+        load_tracks_button = ctk.CTkButton(
+            button_frame, 
+            text="Load Tracks", 
+            command=self.load_tracks, 
+            fg_color="#1DB954"
+        )
+        load_tracks_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
         
         # Scrollable tracklist
         self.tracklist_scroll_frame = ctk.CTkScrollableFrame(self, fg_color="#1E1E1E")
@@ -58,11 +71,18 @@ class TracklistPanel(ctk.CTkFrame):
     def _bind_mousewheel(self):
         """Bind mousewheel events for scrolling."""
         def _on_mousewheel(event):
+            canvas = self.tracklist_scroll_frame._parent_canvas
+            top, bottom = canvas.yview()
+            
+            # Don't scroll if content fits in view
+            if bottom >= 1 and top <= 0:
+                return
+            
             # Normalize mousewheel across OS
             if event.num == 5 or event.delta < 0:   # scroll down
-                self.tracklist_scroll_frame._parent_canvas.yview_scroll(30, "units")
+                canvas.yview_scroll(30, "units")
             elif event.num == 4 or event.delta > 0: # scroll up
-                self.tracklist_scroll_frame._parent_canvas.yview_scroll(-30, "units")
+                canvas.yview_scroll(-30, "units")
 
         # Bind for Windows / Mac / Linux
         self.tracklist_scroll_frame.bind_all("<MouseWheel>", _on_mousewheel)   # Windows / Mac
@@ -202,6 +222,11 @@ class TracklistPanel(ctk.CTkFrame):
         """Sync the current playlist."""
         if self.logic:
             self.logic.sync_playlist()
+    
+    def load_tracks(self):
+        """Load tracks of current playlist into cache."""
+        if self.logic:
+            self.logic.load_tracks()
 
     def show_add_song_dialog(self, song_info):
         """Show dialog for adding a song to playlists."""

@@ -218,6 +218,9 @@ class MusicPlayerUI(ctk.CTk):
 
     def sync_playlist(self):
         return self.tracklist_panel.sync_playlist()
+    
+    def load_tracks(self):
+        return self.tracklist_panel.load_tracks()
 
     def show_add_song_dialog(self, song_info):
         return self.tracklist_panel.show_add_song_dialog(song_info)

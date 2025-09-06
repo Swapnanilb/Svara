@@ -129,11 +129,10 @@ class YouTubeController:
         """Process single song information."""
         self.ui.hide_loading()
         
-        if not full_song_info or not full_song_info.get('url'):
+        if not full_song_info:
             self.ui.show_error(
-                "Playback Error", 
-                "Failed to get a valid stream URL for this song. "
-                "YouTube may have changed its API. Try updating yt-dlp."
+                "Fetch Error", 
+                "Failed to fetch song information from YouTube."
             )
             return
 
@@ -188,3 +187,24 @@ class YouTubeController:
         self.main_logic.sync_mode = True
         self.ui.show_loading("Syncing playlist from YouTube...")
         self.yt_streamer.get_playlist_info(url)
+    
+    def load_tracks_to_cache(self, songs):
+        """Load tracks into cache in background thread."""
+        def cache_tracks():
+            cached_count = 0
+            for song in songs:
+                if song.get('id'):
+                    try:
+                        url = self.yt_streamer.get_fresh_stream_url(song['id'])
+                        if url:
+                            cached_count += 1
+                    except Exception as e:
+                        print(f"Error caching track {song.get('title', 'Unknown')}: {e}")
+            
+            self.ui.after(0, self.ui.hide_loading)
+            self.ui.after(200, lambda: self.ui.show_info(
+                "Load Tracks Complete",
+                f"Successfully cached {cached_count} out of {len(songs)} tracks."
+            ))
+        
+        threading.Thread(target=cache_tracks, daemon=True).start()
