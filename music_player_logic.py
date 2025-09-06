@@ -1,524 +1,177 @@
-import threading
-import random
-import time
-import re
-from youtube_streamer import YouTubeStreamer
-from playlist_manager import PlaylistManager
-from player import MusicPlayer
+from logic.playback_controller import PlaybackController
+from logic.playlist_controller import PlaylistController
+from logic.ui_controller import UIController
+from logic.youtube_controller import YouTubeController
+from logic.progress_tracker import ProgressTracker
+from utils.text_utils import TextUtils
 
 class MusicPlayerLogic:
     def __init__(self, ui_callback_handler):
         """
-        Initialize the music player logic.
+        Initialize the music player logic with modular controllers.
         ui_callback_handler should be an object that implements UI update methods.
         """
         self.ui = ui_callback_handler
+        self.text_utils = TextUtils()
         
-        # Core components
-        self.playlist_manager = PlaylistManager()
-        self.yt_streamer = YouTubeStreamer(self.on_playlist_info_fetched, self.on_single_song_info_fetched)
-        self.music_player = MusicPlayer(self.ui, self.play_next_song)
-        self.youtube_streamer = YouTubeStreamer(self.on_playlist_info_fetched, self.on_single_song_info_fetched)
+        # Initialize controllers
+        self.playback_controller = PlaybackController(self)
+        self.playlist_controller = PlaylistController(self)
+        self.ui_controller = UIController(self)
+        self.youtube_controller = YouTubeController(self)
+        self.progress_tracker = ProgressTracker(self)
         
-        # Player state
-        self.current_song_index = -1
+        # Global state that controllers need access to
         self.current_playlist_id = None
-        self.is_shuffled = False
-        self.is_repeated = False
-        self.shuffled_indices = []
-        self.current_shuffled_index = -1
-        self.current_song_info = None
-        self.progress_thread = None
-        self.stop_thread = threading.Event()
-        self.last_volume = 0.5
-        self.is_seeking = False
-        self.sync_mode = False
+        self.current_song_index = -1
         self.selected_song_index = -1
+        self.sync_mode = False
         
         # Temporary storage
         self.songs_to_add = []
 
+    # Text processing utility
     def clean_title(self, title: str) -> str:
         """Return a simplified song title (remove artist/extra text)."""
-        # Normalize separators
-        title = title.replace("—", "-").replace("–", "-")
+        return self.text_utils.clean_song_title(title)
 
-        # Split on separators commonly used in YouTube titles
-        parts = re.split(r"[-|:]", title)
-
-        # Take the first chunk as base
-        base = parts[0].strip()
-
-        # If base is very short (like "Official"), fallback to next
-        if len(base) < 2 and len(parts) > 1:
-            base = parts[1].strip()
-
-        # Remove text inside () or [] like (Official Video), [Lyric]
-        base = re.sub(r"[\(\[].*?[\)\]]", "", base)
-
-        # Remove common keywords
-        keywords = [
-            "official", "video", "lyrics", "lyrical", "lyric", "cover",
-            "audio", "remix", "live", "acoustic", "version", "full song"
-        ]
-        pattern = r"\b(" + "|".join(keywords) + r")\b"
-        base = re.sub(pattern, "", base, flags=re.IGNORECASE)
-
-        # Clean up
-        base = re.sub(r"\s+", " ", base).strip(" -—–_|")
-
-        return base if base else "Unknown Title"
-
-    def on_playlist_info_fetched(self, playlist_info):
-        """Handle playlist info fetched from YouTube."""
-        self.ui.after(0, lambda: self._update_ui_with_new_playlist(playlist_info))
-
-    def _update_ui_with_new_playlist(self, playlist_info):
-        if not playlist_info:
-            self.ui.show_error("Fetch Error", "Failed to fetch playlist information from YouTube.")
-            return
-
-        playlist_name = playlist_info.get('title', 'Unknown Playlist')
-        songs = playlist_info.get('entries', [])
-        thumbnail = playlist_info.get('thumbnail_url', None)
-        source_url = playlist_info.get('original_url')
-        
-        threading.Thread(target=self._process_playlist_songs_thread, args=(playlist_name, songs, thumbnail, source_url), daemon=True).start()
-
-    def _process_playlist_songs_thread(self, playlist_name, songs, thumbnail, source_url):
-        existing_playlist_id = self.playlist_manager.get_playlist_by_url(source_url)
-        
-        if existing_playlist_id:
-            # Update existing playlist
-            old_songs = self.playlist_manager.get_songs(existing_playlist_id)
-            old_ids = {s['id'] for s in old_songs}
-            new_ids = {s['id'] for s in songs}
-            
-            added_ids = new_ids - old_ids
-            removed_ids = old_ids - new_ids
-
-            # Add new songs with full info
-            for song in songs:
-                if song['id'] in added_ids:
-                    print(f"Fetching full info for new song: {song['id']}")
-                    full_info = self.youtube_streamer.fetch_full_song_info(song['url'])
-                    if full_info:
-                        self.playlist_manager.add_song_to_playlist(existing_playlist_id, full_info)
-            
-            # Remove deleted songs
-            if removed_ids:
-                updated_songs = [s for s in old_songs if s['id'] not in removed_ids]
-                self.playlist_manager.update_playlist_songs(existing_playlist_id, updated_songs)
-
-            # Update metadata
-            playlist_data = self.playlist_manager.get_all_playlists().get(existing_playlist_id, {})
-            if playlist_data.get("name") != playlist_name:
-                playlist_data["name"] = playlist_name
-            if thumbnail and playlist_data.get("thumbnail") != thumbnail:
-                playlist_data["thumbnail"] = thumbnail
-            
-            # Update UI
-            self.ui.after(0, self.ui.hide_loading)
-            self.ui.after(200, self.ui.load_playlist_cards)
-            self.ui.after(200, lambda: self.display_playlist_songs(existing_playlist_id))
-
-            if added_ids or removed_ids:
-                self.ui.after(200, lambda: self.ui.show_info(
-                    "Playlist Updated",
-                    f"Playlist '{playlist_name}' updated.\n\n"
-                    f"Added: {len(added_ids)} songs\nRemoved: {len(removed_ids)} songs"
-                ))
-            else:
-                self.ui.after(200, lambda: self.ui.show_info(
-                    "Already Exists",
-                    f"Playlist '{playlist_name}' already exists with no changes."
-                ))
-
-        else:
-            # New playlist
-            full_songs = []
-            for song in songs:
-                print(f"Fetching full info for new song: {song['id']}")
-                full_info = self.youtube_streamer.fetch_full_song_info(song['url'])
-                if full_info:
-                    full_songs.append(full_info)
-            
-            playlist_id = self.playlist_manager.add_new_playlist(
-                playlist_name, full_songs, source_url, thumbnail
-            )
-            
-            self.ui.after(0, self.ui.hide_loading)
-            self.ui.after(200, lambda: self.ui.create_playlist_card(playlist_name, playlist_id))
-            self.ui.after(200, lambda: self.display_playlist_songs(playlist_id))
-            self.ui.after(200, lambda: self.ui.show_info(
-                "Playlist Uploaded",
-                f"Playlist '{playlist_name}' uploaded successfully."
-            ))
-
-    def on_single_song_info_fetched(self, full_song_info):
-        self.ui.after(0, lambda: self._handle_single_song_info(full_song_info))
-    
-    def _handle_single_song_info(self, full_song_info):
-        self.ui.hide_loading()
-        
-        if not full_song_info or not full_song_info.get('url'):
-            self.ui.show_error("Playback Error", "Failed to get a valid stream URL for this song. YouTube may have changed its API. Try updating yt-dlp.")
-            return
-
-        self.ui.show_add_song_dialog(full_song_info)
+    # Delegate methods to appropriate controllers
+    def play_song_by_index(self, index):
+        """Play a song by its index in the current playlist."""
+        self.playback_controller.play_song_by_index(index)
 
     def play_next_song(self):
-        songs = self.playlist_manager.get_songs(self.current_playlist_id)
-        if not songs:
-            return
-
-        next_index_to_play = -1
-        if self.is_repeated:
-            next_index_to_play = self.current_song_index
-        elif self.is_shuffled:
-            if not self.shuffled_indices:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-            
-            self.current_shuffled_index = (self.current_shuffled_index + 1) % len(self.shuffled_indices)
-            next_index_to_play = self.shuffled_indices[self.current_shuffled_index]
-        else:
-            next_index_to_play = (self.current_song_index + 1) % len(songs)
-        
-        self.play_song_by_index(next_index_to_play)
-        
-    def play_song_by_index(self, index):
-        if not self.current_playlist_id:
-            return
-
-        songs = self.playlist_manager.get_songs(self.current_playlist_id)
-        if 0 <= index < len(songs):
-            song = songs[index]
-            self.current_song_index = index
-            self.current_song_info = song
-            
-            self.stop_thread.set()
-            
-            if not song.get('url'):
-                self.yt_streamer.get_stream_info_for_id(song['id'])
-                self.ui.update_now_playing_view(song, loading=True)
-            else:
-                self.music_player.play_song(self.current_song_info)
-                self.ui.update_now_playing_view(self.current_song_info)
-                self.stop_thread.clear()
-                self.progress_thread = threading.Thread(target=self._update_progress_bar_thread, daemon=True)
-                self.progress_thread.start()
-            
-            self.ui.update_play_pause_button()
-            self.ui.highlight_current_song_widget()
-            self.selected_song_index = index
-        else:
-            self.music_player.stop()
-            self.ui.reset_now_playing_view()
-
-    def _update_progress_bar_thread(self):
-        while True:
-            if self.stop_thread.is_set():
-                break
-            if self.music_player and self.music_player.is_playing:
-                length_ms = self.music_player.get_length()
-                pos_ms = self.music_player.get_pos()
-                if length_ms > 0:
-                    pos_sec = pos_ms / 1000
-                    self.ui.after(0, lambda p=pos_sec: self.ui.update_progress(p))
-            time.sleep(0.5)
-
-    def display_playlist_songs(self, playlist_id):
-        self.current_playlist_id = playlist_id
-        self.ui.update_playlist_card_colors(playlist_id)
-        self.ui.clear_track_list()
-        threading.Thread(target=self._load_playlist_thread, args=(playlist_id,), daemon=True).start()
-        
-    def _load_playlist_thread(self, playlist_id):
-        songs = self.playlist_manager.get_songs(playlist_id)
-        self.songs_to_add = songs
-        
-        if self.is_shuffled:
-            self.shuffled_indices = list(range(len(songs)))
-            random.shuffle(self.shuffled_indices)
-            self.current_shuffled_index = -1
-        
-        self.selected_song_index = -1
-        self.ui.after(10, self._update_ui_with_songs_in_chunks)
-
-    def _update_ui_with_songs_in_chunks(self, chunk_size=50):
-        if self.songs_to_add:
-            chunk = self.songs_to_add[:chunk_size]
-            self.songs_to_add = self.songs_to_add[chunk_size:]
-            
-            for song in chunk:
-                self.ui.create_song_widget(song)
-            
-            self.ui.after(10, self._update_ui_with_songs_in_chunks)
-
-    def add_from_link(self, url):
-        if not url.strip():
-            return
-
-        self.ui.show_loading("Fetching info from YouTube...")
-
-        def process_link():
-            try:
-                if "list=" in url:
-                    self.youtube_streamer.get_playlist_info(url)
-                else:
-                    full_info = self.youtube_streamer.fetch_full_song_info(url)
-                    if full_info:
-                        self.ui.after(0, lambda: self._handle_single_song_info(full_info))
-                    else:
-                        self.ui.after(0, self.ui.hide_loading)
-                        self.ui.after(200, lambda: self.ui.show_error(
-                            "Error",
-                            "Could not fetch this song (no stream info). Try updating yt-dlp."
-                        ))
-            except Exception as e:
-                print(f"Error fetching link: {e}")
-                self.ui.after(0, self.ui.hide_loading)
-                self.ui.after(200, lambda: self.ui.show_error(
-                    "Error",
-                    f"Could not fetch info from YouTube.\n\n{e}"
-                ))
-
-        threading.Thread(target=process_link, daemon=True).start()
-
-    def sync_playlist(self):
-        if not self.current_playlist_id:
-            self.ui.show_info("Sync Error", "Please select a playlist to sync first.")
-            return
-
-        playlists = self.playlist_manager.get_all_playlists()
-        playlist_data = playlists.get(self.current_playlist_id, {})
-        url = playlist_data.get('source_url')
-
-        if not url:
-            self.ui.show_info("Sync Error", "This playlist does not have a source YouTube URL.")
-            return
-
-        self.sync_mode = True
-        self.ui.show_loading("Syncing playlist from YouTube...")
-        self.yt_streamer.get_playlist_info(url)
+        """Play the next song based on current mode (shuffle/repeat)."""
+        self.playback_controller.play_next_song()
 
     def toggle_play_pause(self):
-        if self.music_player.is_playing and not self.music_player.is_paused:
-            self.music_player.pause()
-            self.stop_thread.set()
-        elif self.music_player.is_paused:
-            self.music_player.unpause()
-            self.stop_thread.clear()
-            self.progress_thread = threading.Thread(target=self._update_progress_bar_thread, daemon=True)
-            self.progress_thread.start()
-        elif self.current_song_index != -1 and self.current_playlist_id:
-            self.play_song_by_index(self.current_song_index)
-        else:
-            first_playlist_id = list(self.playlist_manager.get_all_playlists().keys())[0] if self.playlist_manager.get_all_playlists() else None
-            if first_playlist_id:
-                self.display_playlist_songs(first_playlist_id)
-                self.play_song_by_index(0)
-        self.ui.update_play_pause_button()
+        """Toggle between play and pause states."""
+        self.playback_controller.toggle_play_pause()
 
     def next_song(self):
-        songs = self.playlist_manager.get_songs(self.current_playlist_id)
-        if not songs:
-            return
-
-        next_index_to_play = -1
-        if self.is_repeated:
-            next_index_to_play = self.current_song_index
-        elif self.is_shuffled:
-            if not self.shuffled_indices:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-            
-            self.current_shuffled_index = (self.current_shuffled_index + 1) % len(self.shuffled_indices)
-            next_index_to_play = self.shuffled_indices[self.current_shuffled_index]
-        else:
-            next_index_to_play = (self.current_song_index + 1) % len(songs)
-        
-        self.play_song_by_index(next_index_to_play)
+        """Skip to the next song."""
+        self.playback_controller.next_song()
 
     def prev_song(self):
-        songs = self.playlist_manager.get_songs(self.current_playlist_id)
-        if not songs:
-            return
-
-        if self.is_repeated:
-            next_index_to_play = self.current_song_index
-        elif self.is_shuffled:
-            if not self.shuffled_indices:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-            
-            self.current_shuffled_index = (self.current_shuffled_index - 1 + len(self.shuffled_indices)) % len(self.shuffled_indices)
-            next_index_to_play = self.shuffled_indices[self.current_shuffled_index]
-        else:
-            next_index_to_play = (self.current_song_index - 1 + len(songs)) % len(songs)
-            
-        self.play_song_by_index(next_index_to_play)
+        """Skip to the previous song."""
+        self.playback_controller.prev_song()
 
     def toggle_shuffle(self):
-        self.is_shuffled = not self.is_shuffled
-        if self.is_shuffled:
-            songs = self.playlist_manager.get_songs(self.current_playlist_id)
-            if songs:
-                self.shuffled_indices = list(range(len(songs)))
-                random.shuffle(self.shuffled_indices)
-                self.current_shuffled_index = -1
-        else:
-            self.shuffled_indices = []
-            self.current_shuffled_index = -1
-
-        self.ui.update_shuffle_button(self.is_shuffled)
-        print(f"Shuffle is now {'on' if self.is_shuffled else 'off'}")
+        """Toggle shuffle mode on/off."""
+        self.playback_controller.toggle_shuffle()
 
     def toggle_repeat(self):
-        self.is_repeated = not self.is_repeated
-        self.ui.update_repeat_button(self.is_repeated)
-        print(f"Repeat is now {'on' if self.is_repeated else 'off'}")
+        """Toggle repeat mode on/off."""
+        self.playback_controller.toggle_repeat()
 
     def set_volume(self, volume):
-        self.music_player.set_volume(volume)
-        if volume > 0:
-            self.last_volume = volume
-        self.ui.update_mute_button(volume > 0)
+        """Set the playback volume."""
+        self.playback_controller.set_volume(volume)
 
     def toggle_mute(self):
-        current_volume = self.ui.get_volume()
-        if current_volume > 0:
-            self.last_volume = current_volume
-            self.ui.set_volume(0)
-            self.music_player.set_volume(0)
-        else:
-            volume_to_set = self.last_volume if self.last_volume > 0 else 0.5
-            self.ui.set_volume(volume_to_set)
-            self.music_player.set_volume(volume_to_set)
-        self.ui.update_mute_button(self.ui.get_volume() > 0)
-
-    def seek_forward(self, seconds):
-        if self.music_player.is_playing:
-            current_pos = self.music_player.get_pos()
-            new_pos_ms = current_pos + (seconds * 1000)
-            self.music_player.set_pos(new_pos_ms)
-            self.ui.set_progress(new_pos_ms / 1000)
-            
-    def seek_backward(self, seconds):
-        if self.music_player.is_playing:
-            current_pos = self.music_player.get_pos()
-            new_pos_ms = max(0, current_pos - (seconds * 1000))
-            self.music_player.set_pos(new_pos_ms)
-            self.ui.set_progress(new_pos_ms / 1000)
-
-    def handle_progress_change(self, value):
-        pos_sec = float(value)
-        self.ui.update_elapsed_time(pos_sec)
-        
-        if not self.is_seeking and self.music_player.is_playing:
-            self.music_player.set_pos(pos_sec * 1000)
-
-    def set_seeking(self, seeking):
-        self.is_seeking = seeking
-
-    def handle_slider_seek(self, progress):
-        if self.music_player and self.music_player.is_playing:
-            length_ms = self.music_player.get_length()
-            new_pos = int(progress * length_ms)
-            self.music_player.set_pos(new_pos)
-
-    def remove_song_by_index(self, index_to_remove):
-        if not self.current_playlist_id:
-            return
-        
-        if self.current_song_index == index_to_remove:
-            self.music_player.stop()
-            self.ui.reset_now_playing_view()
-            self.current_song_index = -1
-        
-        self.playlist_manager.remove_song_from_playlist(self.current_playlist_id, index_to_remove)
-        self.display_playlist_songs(self.current_playlist_id)
-
-    def filter_songs(self, search_term):
-        if search_term.lower() == "search playlist...":
-            search_term = ""
-
-        self.ui.clear_track_list()
-        
-        songs = self.playlist_manager.get_songs(self.current_playlist_id)
-        filtered_songs = [s for s in songs if search_term.lower() in s['title'].lower()]
-        
-        self.songs_to_add = filtered_songs
-        self.ui.after(10, self._update_ui_with_songs_in_chunks)
-
-    def select_next_song(self):
-        song_count = len(self.ui.song_widgets)
-        if not song_count:
-            return
-        
-        new_index = (self.selected_song_index + 1) % song_count
-        self.ui.select_song_by_index(new_index)
-        self.selected_song_index = new_index
-
-    def select_prev_song(self):
-        song_count = len(self.ui.song_widgets)
-        if not song_count:
-            return
-        
-        new_index = (self.selected_song_index - 1 + song_count) % song_count
-        self.ui.select_song_by_index(new_index)
-        self.selected_song_index = new_index
-        
-    def play_selected_song(self):
-        if self.selected_song_index != -1:
-            self.play_song_by_index(self.selected_song_index)
+        """Toggle mute on/off."""
+        self.playback_controller.toggle_mute()
 
     def volume_up(self):
-        current_volume = self.ui.get_volume()
-        new_volume = min(1.0, current_volume + 0.1)
-        self.ui.set_volume(new_volume)
-        self.music_player.set_volume(new_volume)
+        """Increase volume by 10%."""
+        self.playback_controller.volume_up()
 
     def volume_down(self):
-        current_volume = self.ui.get_volume()
-        new_volume = max(0.0, current_volume - 0.1)
-        self.ui.set_volume(new_volume)
-        self.music_player.set_volume(new_volume)
+        """Decrease volume by 10%."""
+        self.playback_controller.volume_down()
+
+    def seek_forward(self, seconds):
+        """Seek forward by specified seconds."""
+        self.playback_controller.seek_forward(seconds)
+
+    def seek_backward(self, seconds):
+        """Seek backward by specified seconds."""
+        self.playback_controller.seek_backward(seconds)
+
+    def preview_progress(self, value):
+        """Preview progress position without seeking."""
+        self.progress_tracker.preview_progress(value)
+
+    def set_seeking(self, seeking):
+        """Set seeking state."""
+        self.progress_tracker.set_seeking(seeking)
+
+    def handle_slider_seek(self, seconds):
+        """Handle slider seek operation."""
+        self.progress_tracker.handle_slider_seek(seconds)
+
+    def display_playlist_songs(self, playlist_id):
+        """Display songs from a specific playlist."""
+        self.playlist_controller.display_playlist_songs(playlist_id)
+
+    def add_from_link(self, url):
+        """Add song or playlist from YouTube URL."""
+        self.youtube_controller.add_from_link(url)
+
+    def sync_playlist(self):
+        """Sync current playlist with YouTube source."""
+        self.youtube_controller.sync_playlist()
+
+    def filter_songs(self, search_term):
+        """Filter displayed songs by search term."""
+        self.playlist_controller.filter_songs(search_term)
+
+    def remove_song_by_index(self, index_to_remove):
+        """Remove a song from the current playlist."""
+        self.playlist_controller.remove_song_by_index(index_to_remove)
+
+    def select_next_song(self):
+        """Select the next song in the list."""
+        self.ui_controller.select_next_song()
+
+    def select_prev_song(self):
+        """Select the previous song in the list."""
+        self.ui_controller.select_prev_song()
+
+    def play_selected_song(self):
+        """Play the currently selected song."""
+        self.ui_controller.play_selected_song()
 
     def remove_playlist(self, playlist_id):
-        if self.current_playlist_id == playlist_id:
-            self.music_player.stop()
-            self.ui.reset_now_playing_view()
-            self.current_song_index = -1
-            self.current_playlist_id = None
-        
-        self.playlist_manager.remove_playlist(playlist_id)
-        self.ui.load_playlist_cards()
-        self.ui.clear_track_list()
+        """Remove a playlist entirely."""
+        self.playlist_controller.remove_playlist(playlist_id)
 
     def upload_playlist_thumbnail(self, playlist_id, file_path):
-        if file_path:
-            self.playlist_manager.update_playlist_thumbnail(playlist_id, file_path)
-            self.ui.update_playlist_card_thumbnail(playlist_id)
-            
+        """Upload a custom thumbnail for a playlist."""
+        self.playlist_controller.upload_playlist_thumbnail(playlist_id, file_path)
+
     def remove_custom_playlist_thumbnail(self, playlist_id):
-        self.playlist_manager.remove_playlist_thumbnail(playlist_id)
-        self.ui.update_playlist_card_thumbnail(playlist_id)
+        """Remove custom thumbnail from a playlist."""
+        self.playlist_controller.remove_custom_playlist_thumbnail(playlist_id)
 
     def add_song_to_playlist(self, playlist_id, song_info):
-        if not self.playlist_manager.song_exists(playlist_id, song_info["id"]):
-            self.playlist_manager.add_song_to_playlist(playlist_id, song_info)
-            self.display_playlist_songs(playlist_id)
-            return True
-        return False
+        """Add a song to a specific playlist."""
+        return self.playlist_controller.add_song_to_playlist(playlist_id, song_info)
 
     def create_new_playlist_with_song(self, name, song_info):
-        playlist_id = self.playlist_manager.add_new_playlist(name, [song_info])
-        self.ui.create_playlist_card(name, playlist_id)
-        self.display_playlist_songs(playlist_id)
+        """Create a new playlist with a single song."""
+        playlist_id = self.playlist_controller.create_new_playlist_with_song(name, song_info)
+        # Refresh playlist cards after creation
+        self.ui.load_playlist_cards()
         return playlist_id
 
     def stop_and_cleanup(self):
-        self.stop_thread.set()
-        self.music_player.stop()
+        """Stop playback and clean up resources."""
+        self.playback_controller.stop_and_cleanup()
+        self.progress_tracker.stop_and_cleanup()
+
+    # Properties for controllers to access
+    @property
+    def playlist_manager(self):
+        """Access to playlist manager through playlist controller."""
+        return self.playlist_controller.playlist_manager
+
+    @property
+    def music_player(self):
+        """Access to music player through playback controller."""
+        return self.playback_controller.music_player
+
+    @property
+    def is_seeking(self):
+        """Check if currently seeking."""
+        return self.progress_tracker.is_seeking
