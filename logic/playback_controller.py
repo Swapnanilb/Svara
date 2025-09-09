@@ -32,12 +32,12 @@ class PlaybackController:
             # Stop any existing progress tracking
             self.main_logic.progress_tracker.stop_progress_tracking()
             
-            if not song.get('url'):
-                # Need to fetch stream URL
-                self.main_logic.youtube_controller.yt_streamer.get_stream_info_for_id(song['id'])
+            # Always fetch fresh URL for YouTube songs
+            if song.get('id'):  # YouTube song
                 self.ui.update_now_playing_view(song, loading=True)
+                threading.Thread(target=self._play_with_fresh_url, args=(song,), daemon=True).start()
             else:
-                # Ready to play
+                # Local file or other source
                 self.music_player.play_song(self.current_song_info)
                 self.ui.update_now_playing_view(self.current_song_info)
                 self.main_logic.progress_tracker.start_progress_tracking()
@@ -212,6 +212,40 @@ class PlaybackController:
             self.shuffled_indices = list(range(song_count))
             random.shuffle(self.shuffled_indices)
             self.current_shuffled_index = -1
+
+    def _play_with_fresh_url(self, song):
+        """Fetch fresh URL and play song in background thread."""
+        try:
+            fresh_url = self.main_logic.youtube_controller.yt_streamer.get_fresh_stream_url(song['id'])
+            if fresh_url:
+                # Update song info with fresh URL
+                song_with_url = song.copy()
+                song_with_url['url'] = fresh_url
+                self.current_song_info = song_with_url
+                
+                # Play on main thread
+                self.ui.after(0, lambda: self._start_playback(song_with_url))
+            else:
+                self.ui.after(0, lambda: self._show_playback_error(song))
+        except Exception as e:
+            print(f"Error fetching fresh URL: {e}")
+            self.ui.after(0, lambda: self._show_playback_error(song))
+    
+    def _start_playback(self, song_with_url):
+        """Start playback with fresh URL on main thread."""
+        self.music_player.play_song(song_with_url)
+        self.ui.update_now_playing_view(song_with_url)
+        self.main_logic.progress_tracker.start_progress_tracking()
+        # Force UI update after playback starts
+        self.ui.after(100, self.ui.update_play_pause_button)
+    
+    def _show_playback_error(self, song):
+        """Show error when unable to get fresh URL."""
+        self.ui.update_now_playing_view(song, loading=False)
+        self.ui.show_error(
+            "Playback Error",
+            f"Unable to play '{song.get('title', 'Unknown')}'. The video may be unavailable."
+        )
 
     def stop_and_cleanup(self):
         """Stop playback and clean up resources."""

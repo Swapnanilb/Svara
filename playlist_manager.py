@@ -13,15 +13,15 @@ class PlaylistManager:
     def load_playlists(self):
         if os.path.exists(self.filename):
             try:
-                with open(self.filename, 'r') as f:
+                with open(self.filename, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 return {}
         return {}
 
     def save_playlists(self):
-        with open(self.filename, 'w') as f:
-            json.dump(self.playlists, f, indent=4)
+        with open(self.filename, 'w', encoding='utf-8') as f:
+            json.dump(self.playlists, f, indent=4, ensure_ascii=False)
 
     def add_new_playlist(self, name, songs, source_url=None, thumbnail=None):
         playlist_id = str(uuid.uuid4())

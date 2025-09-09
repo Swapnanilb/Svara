@@ -111,6 +111,20 @@ class MusicPlayerLogic:
     def sync_playlist(self):
         """Sync current playlist with YouTube source."""
         self.youtube_controller.sync_playlist()
+    
+    def load_tracks(self):
+        """Load tracks of current playlist into cache."""
+        if not self.current_playlist_id:
+            self.ui.show_info("Load Tracks", "Please select a playlist first.")
+            return
+        
+        songs = self.playlist_manager.get_songs(self.current_playlist_id)
+        if not songs:
+            self.ui.show_info("Load Tracks", "No tracks found in the current playlist.")
+            return
+        
+        self.ui.show_loading(f"Loading {len(songs)} tracks into cache...")
+        self.youtube_controller.load_tracks_to_cache(songs)
 
     def filter_songs(self, search_term):
         """Filter displayed songs by search term."""

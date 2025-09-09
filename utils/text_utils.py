@@ -6,7 +6,7 @@ class TextUtils:
 
     def clean_song_title(self, title: str) -> str:
         """
-        Return a simplified song title by removing artist names and extra text.
+        Return a cleaned song title with minimal processing.
         
         Args:
             title: Original song title from YouTube
@@ -17,34 +17,36 @@ class TextUtils:
         if not title:
             return "Unknown Title"
             
-        # Normalize separators
-        title = title.replace("–", "-").replace("—", "-")
-
-        # Split on separators commonly used in YouTube titles
-        parts = re.split(r"[-|:]", title)
-
-        # Take the first chunk as base
-        base = parts[0].strip()
-
-        # If base is very short (like "Official"), fallback to next
-        if len(base) < 2 and len(parts) > 1:
-            base = parts[1].strip()
-
         # Remove text inside () or [] like (Official Video), [Lyric]
-        base = re.sub(r"[\(\[].*?[\)\]]", "", base)
-
+        cleaned = re.sub(r"[\(\[].*?[\)\]]", "", title)
+        
+        # Split by common separators
+        parts = re.split(r"[|\-–—]", cleaned)
+        
+        # Find the best part (usually song name comes before artist)
+        best_part = parts[0].strip()
+        
+        # If first part looks like an artist name (short, single word), try next part
+        if len(parts) > 1 and (len(best_part.split()) <= 2 or len(best_part) < 10):
+            second_part = parts[1].strip()
+            if len(second_part) > len(best_part):
+                best_part = second_part
+        
+        cleaned = best_part
+        
         # Remove common keywords
-        keywords = [
-            "official", "video", "lyrics", "lyrical", "lyric", "cover",
-            "audio", "remix", "live", "acoustic", "version", "full song"
-        ]
-        pattern = r"\b(" + "|".join(keywords) + r")\b"
-        base = re.sub(pattern, "", base, flags=re.IGNORECASE)
-
-        # Clean up extra whitespace and separators
-        base = re.sub(r"\s+", " ", base).strip(" -–—_|")
-
-        return base if base else "Unknown Title"
+        keywords = ["official", "video", "lyrics", "lyrical", "audio", "full song"]
+        pattern = r"\s*\b(" + "|".join(keywords) + r")\b\s*"
+        cleaned = re.sub(pattern, " ", cleaned, flags=re.IGNORECASE)
+        
+        # Clean up extra whitespace
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        
+        # Truncate if too long
+        if len(cleaned) > 50:
+            cleaned = cleaned[:47] + "..."
+        
+        return cleaned if cleaned else "Unknown Title"
 
     def truncate_text(self, text: str, max_length: int, ellipsis: str = "...") -> str:
         """

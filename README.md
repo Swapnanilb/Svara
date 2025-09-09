@@ -19,6 +19,10 @@ Supports streaming music from **YouTube playlists and individual song links**, a
 - ▶️ **Play music directly from YouTube**  
 - 🖼️ **Custom icons** for player controls  
 - 🖥️ **Separate Load Music and Player UIs**  
+- ⚡ **Smart URL Caching** for faster song loading  
+- 🔄 **Load Tracks** button to pre-cache entire playlists  
+- 🎵 **Enhanced Song Title Display** with artist and song names  
+- 🔗 **Dynamic URL Fetching** - no more expired links  
 
 ---
 
@@ -27,10 +31,10 @@ Supports streaming music from **YouTube playlists and individual song links**, a
 MUSIC-PLAYER/
 ├── components/                 # UI Components
 │   ├── __init__.py
-│   ├── control_panel.py        # Media controls
+│   ├── control_panel.py        # Media controls with Load Tracks button
 │   ├── now_playing_panel.py    # Current song display
 │   ├── playlist_panel.py       # Playlist management panel
-│   └── tracklist_panel.py      # Song list and search
+│   └── tracklist_panel.py      # Song list, search, and Load Tracks
 │── icons/                      # Player icons (play, pause, next, etc.)
 ├── logic/                      # Logic Controllers
 │   ├── __init__.py
@@ -38,21 +42,21 @@ MUSIC-PLAYER/
 │   ├── playlist_controller.py  # Playlist management
 │   ├── progress_tracker.py     # Progress tracking  
 │   ├── ui_controller.py        # UI state management
-│   └── youtube_controller.py   # YouTube integration
+│   └── youtube_controller.py   # YouTube integration with caching
 |── logo_animation.gif          # The splashscreen animation of the logo
 ├── utils/                      # Utilities
 │   ├── __init__.py
 │   ├── icon_loader.py          # Icon management
 │   ├── image_utils.py          # Image processing
-│   └── text_utils.py           # Text processing utilities
+│   └── text_utils.py           # Enhanced text processing utilities
 │── main.py                     # Entry point of the app
 │── music_player_logic.py       # Logic for the app functions
 │── music_player_ui.py          # User interface
 │── player.py                   # Core player logic
-│── playlist_manager.py         # Playlist handling
-│── playlists.json              # Saved playlists (ignored in Git)
+│── playlist_manager.py         # Playlist handling with UTF-8 support
+│── playlists.json              # Saved playlists (metadata only)
 │── requirements.txt            # Python dependencies
-│── youtube_streamer.py         # YouTube streaming support
+│── youtube_streamer.py         # YouTube streaming with URL caching
 │── README.md                   # Project documentation
 
 ```
@@ -96,10 +100,12 @@ python main.py
 ```
 
 ### 📦 Dependencies
-* **vlc** — Audio playback
+* **customtkinter** — Modern UI framework
+* **python-vlc** — Audio playback
 * **yt-dlp** — YouTube streaming support
-* **tkinter** — User interface
 * **Pillow** — Image handling
+* **pygame** — Additional audio support
+* **pytube** — YouTube integration
 
 You can install them via requirements.txt:
 ```bash
@@ -107,6 +113,27 @@ You can install them via requirements.txt:
 pip install -r requirements.txt
 
 ```
+
+## ✨ New Features
+
+### Smart Caching System
+- **1-hour URL cache** prevents re-fetching stream URLs
+- **Load Tracks button** pre-caches entire playlists for instant playback
+- **Dynamic URL fetching** ensures songs never fail due to expired links
+
+### Enhanced User Experience
+- **Improved song titles** showing both artist and song names
+- **Better scroll behavior** with proper bounds checking
+- **Fixed UI states** for play/pause button accuracy
+- **UTF-8 support** for international characters in song titles
+
+## 🔧 Technical Improvements
+
+- **Modular Architecture**: Clean separation between UI and logic
+- **Error Handling**: Comprehensive error handling with user feedback
+- **Performance**: Background processing and smart caching
+- **Reliability**: No more expired URL issues
+- **Compatibility**: UTF-8 encoding for international content
 
 ### 🤝 Contributing
 Contributions are welcome!
