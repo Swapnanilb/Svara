@@ -1,0 +1,47 @@
+{
+  "name": "music-player-electron",
+  "version": "1.0.0",
+  "description": "Music Player Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "dist": "npm run build"
+  },
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.musicplayer.app",
+    "productName": "Music Player",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "../frontend/build/**/*",
+      "../backend/dist/api_server.exe"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/api_server.exe",
+        "to": "backend/api_server.exe"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.png"
+    }
+  }
+}
