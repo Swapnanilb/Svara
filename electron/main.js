@@ -30,7 +30,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     // Production: Load from built React app
-    const indexPath = path.join(__dirname, '../frontend/build/index.html');
+    const indexPath = path.join(__dirname, 'resources/frontend/build/index.html');
     mainWindow.loadFile(indexPath);
   }
 
@@ -70,11 +70,11 @@ function startBackend() {
       }
     } else {
       // Production: Run compiled executable
-      backendPath = path.join(process.resourcesPath, 'backend/api_server.exe');
+      backendPath = path.join(__dirname, 'resources/backend/api_server.exe');
       
       if (!fs.existsSync(backendPath)) {
-        // Fallback to local path if not in resources
-        backendPath = path.join(__dirname, '../backend/dist/api_server.exe');
+        // Fallback to process resources
+        backendPath = path.join(process.resourcesPath, 'backend/api_server.exe');
       }
       
       if (!fs.existsSync(backendPath)) {

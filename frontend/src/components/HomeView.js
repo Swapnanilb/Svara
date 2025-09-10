@@ -128,7 +128,7 @@ const HomeView = ({ onStatusUpdate, theme }) => {
       padding: '40px' 
     }}>
       <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-        <img src="/svara_logo.png" alt="SVARA" style={{ height: '200px', marginBottom: '10px' }} />
+        <img src="./svara_logo.png" alt="SVARA" style={{ height: '200px', marginBottom: '10px' }} />
         <p style={{ fontSize: '16px', color: theme === 'dark' ? '#ccc' : '#999', marginBottom: '0' }}>
           Add your favorite playlists and songs
         </p>

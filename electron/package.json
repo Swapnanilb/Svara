@@ -15,33 +15,34 @@
   },
   "build": {
     "appId": "com.musicplayer.app",
-    "productName": "Music Player",
+    "productName": "SVARA Music Player",
     "directories": {
       "output": "dist"
     },
     "files": [
       "main.js",
-      "preload.js",
-      "../frontend/build/**/*",
-      "../backend/dist/api_server.exe"
+      "preload.js"
     ],
-    "extraResources": [
+    "extraFiles": [
+      {
+        "from": "../frontend/build",
+        "to": "resources/frontend/build",
+        "filter": ["**/*"]
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "../frontend/build",
+        "to": "resources/frontend/build",
+        "filter": ["**/*"]
+      },
       {
         "from": "../backend/dist/api_server.exe",
-        "to": "backend/api_server.exe"
+        "to": "resources/backend/api_server.exe"
       }
     ],
     "win": {
-      "target": "nsis",
-      "icon": "icon.ico"
-    },
-    "mac": {
-      "target": "dmg",
-      "icon": "icon.icns"
-    },
-    "linux": {
-      "target": "AppImage",
-      "icon": "icon.png"
+      "target": "dir"
     }
   }
 }
