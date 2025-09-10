@@ -112,6 +112,18 @@ backend/temp/
 *.mp4
 *.webm
 
+# Test environment
+test/
+
+# Performance logs
+backend/performance_metrics.log
+backend/simple_log_viewer.py
+backend/view_logs.bat
+
+# Cache files
+backend/song_url_cache.json
+backend/song_metadata_cache.json
+
 # PyInstaller
 *.manifest
 *.spec

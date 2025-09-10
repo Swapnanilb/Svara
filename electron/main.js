@@ -45,7 +45,7 @@ function createWindow() {
 }
 
 function startBackend() {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     // Kill existing processes on port 5001
     if (process.platform === 'win32') {
       spawn('taskkill', ['/f', '/im', 'python.exe'], { stdio: 'ignore' });
@@ -54,12 +54,20 @@ function startBackend() {
     let backendPath;
     
     if (isDev) {
-      // Development: Run Python script directly
-      backendPath = path.join(__dirname, '../backend/api_server.py');
-      backendProcess = spawn('python', [backendPath], {
-        cwd: path.join(__dirname, '../backend'),
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+      // Development: Check if backend is already running
+      try {
+        const response = await fetch('http://127.0.0.1:5001/api/status');
+        if (response.ok) {
+          console.log('Backend already running');
+          resolve();
+          return;
+        }
+      } catch (e) {
+        // Backend not running, skip starting it since batch file handles it
+        console.log('Backend will be started by batch file');
+        resolve();
+        return;
+      }
     } else {
       // Production: Run compiled executable
       backendPath = path.join(process.resourcesPath, 'backend/api_server.exe');

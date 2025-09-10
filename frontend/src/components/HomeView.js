@@ -40,9 +40,13 @@ const HomeView = ({ onStatusUpdate, theme }) => {
           setPopupMessage('Playlist already exists!');
           setShowPopup(true);
         } else {
+          // Keep loading while playlist processes
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for processing
+          await loadPlaylists(); // Refresh to show new playlist
           setMessage('Playlist added successfully!');
         }
         setNewUrl('');
+        setLoading(false);
       } else {
         // Validate YouTube URL
         const videoIdMatch = newUrl.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
@@ -54,13 +58,14 @@ const HomeView = ({ onStatusUpdate, theme }) => {
         }
         
         await loadPlaylists();
+        setLoading(false);
         setShowPlaylistDialog(true);
       }
     } catch (error) {
       setMessage('Error adding content. Please try again.');
       console.error('Error adding content:', error);
+      setLoading(false);
     }
-    setLoading(false);
     setTimeout(() => setIsAdding(false), 2000);
   };
 
@@ -68,7 +73,10 @@ const HomeView = ({ onStatusUpdate, theme }) => {
     if (!selectedPlaylistId) return;
     setLoading(true);
     try {
+      console.log('Checking song existence...');
       const checkResponse = await musicAPI.checkSong(newUrl, selectedPlaylistId);
+      console.log('Check response:', checkResponse);
+      
       if (checkResponse.exists) {
         setPopupMessage('Song already exists in playlist!');
         setShowPopup(true);
@@ -76,14 +84,16 @@ const HomeView = ({ onStatusUpdate, theme }) => {
         setShowPlaylistDialog(false);
         setSelectedPlaylistId(null);
       } else {
+        console.log('Adding song to playlist...');
         const response = await musicAPI.addSong(newUrl, selectedPlaylistId);
+        console.log('Add response:', response);
         setMessage('Song added to playlist!');
         setNewUrl('');
         setShowPlaylistDialog(false);
         setSelectedPlaylistId(null);
       }
     } catch (error) {
-      setMessage('Error adding song. Please try again.');
+      setMessage(`Error adding song: ${error.response?.data?.detail || error.message}`);
       console.error('Error adding song:', error);
     }
     setLoading(false);
@@ -93,13 +103,16 @@ const HomeView = ({ onStatusUpdate, theme }) => {
     if (!newPlaylistName.trim()) return;
     setLoading(true);
     try {
-      await musicAPI.addSong(newUrl, null, newPlaylistName);
+      console.log('Creating new playlist with song...');
+      const response = await musicAPI.addSong(newUrl, null, newPlaylistName);
+      console.log('Create response:', response);
       setMessage('New playlist created with song!');
       setNewUrl('');
       setNewPlaylistName('');
       setShowPlaylistDialog(false);
+      await loadPlaylists(); // Refresh playlists
     } catch (error) {
-      setMessage('Error creating playlist. Please try again.');
+      setMessage(`Error creating playlist: ${error.response?.data?.detail || error.message}`);
       console.error('Error creating playlist:', error);
     }
     setLoading(false);
@@ -198,8 +211,8 @@ const HomeView = ({ onStatusUpdate, theme }) => {
             <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>Add Song to Playlist</h3>
             
             <div style={{ marginBottom: '20px' }}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#666' }}>Existing Playlists:</h4>
-              {playlists.map(playlist => (
+              <h4 style={{ margin: '0 0 10px 0', color: '#666' }}>Local Playlists:</h4>
+              {playlists.filter(playlist => !playlist.source_url).map(playlist => (
                 <button
                   key={playlist.id}
                   onClick={() => setSelectedPlaylistId(playlist.id)}
@@ -213,6 +226,11 @@ const HomeView = ({ onStatusUpdate, theme }) => {
                   {playlist.name}
                 </button>
               ))}
+              {playlists.filter(playlist => !playlist.source_url).length === 0 && (
+                <p style={{ color: '#999', fontStyle: 'italic', margin: '10px 0' }}>
+                  No local playlists available. Create a new one below.
+                </p>
+              )}
               
               {selectedPlaylistId && (
                 <button

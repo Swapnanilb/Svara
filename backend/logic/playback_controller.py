@@ -1,6 +1,8 @@
 import threading
 import random
+import time
 from player import MusicPlayer
+from performance_logger import perf_logger
 
 class PlaybackController:
     def __init__(self, main_logic):
@@ -29,8 +31,12 @@ class PlaybackController:
             self.main_logic.current_song_index = index
             self.current_song_info = song
             
-            # Stop any existing progress tracking
+            # Stop any existing progress tracking and playback
             self.main_logic.progress_tracker.stop_progress_tracking()
+            self.music_player.stop()
+            
+            # Preload next few songs in background
+            self._preload_upcoming_songs(songs, index)
             
             # Always fetch fresh URL for YouTube songs
             if song.get('id'):  # YouTube song
@@ -246,6 +252,24 @@ class PlaybackController:
             "Playback Error",
             f"Unable to play '{song.get('title', 'Unknown')}'. The video may be unavailable."
         )
+
+    def _preload_upcoming_songs(self, songs, current_index):
+        """Preload URLs for upcoming songs."""
+        upcoming_ids = []
+        for i in range(1, 4):  # Next 3 songs
+            next_idx = (current_index + i) % len(songs)
+            song = songs[next_idx]
+            if song.get('id'):
+                upcoming_ids.append(song['id'])
+        
+        if upcoming_ids:
+            # Count cache hits before preloading
+            cache_hits = sum(1 for vid_id in upcoming_ids 
+                           if vid_id in self.main_logic.youtube_controller.yt_streamer.url_cache)
+            cache_misses = len(upcoming_ids) - cache_hits
+            
+            perf_logger.log_cache_operation("preload_upcoming", upcoming_ids, cache_hits, cache_misses)
+            self.main_logic.youtube_controller.yt_streamer.preload_song_urls(upcoming_ids)
 
     def stop_and_cleanup(self):
         """Stop playback and clean up resources."""

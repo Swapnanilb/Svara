@@ -38,6 +38,10 @@ class YouTubeController:
         """Process playlist songs in a background thread."""
         existing_playlist_id = self.main_logic.playlist_manager.get_playlist_by_url(source_url)
         
+        # If no URL match, check for duplicate by comparing song IDs
+        if not existing_playlist_id:
+            existing_playlist_id = self._find_duplicate_playlist_by_content(songs)
+        
         if existing_playlist_id:
             self._update_existing_playlist(existing_playlist_id, playlist_name, songs, thumbnail)
         else:
@@ -52,18 +56,39 @@ class YouTubeController:
         added_ids = new_ids - old_ids
         removed_ids = old_ids - new_ids
 
-        # Add new songs with full info
-        for song in songs:
-            if song['id'] in added_ids:
-                print(f"Fetching full info for new song: {song['id']}")
-                full_info = self.yt_streamer.fetch_full_song_info(song['url'])
-                if full_info:
-                    self.main_logic.playlist_manager.add_song_to_playlist(playlist_id, full_info)
+        # Build complete updated song list
+        updated_songs = []
         
-        # Remove deleted songs
-        if removed_ids:
-            updated_songs = [s for s in old_songs if s['id'] not in removed_ids]
-            self.main_logic.playlist_manager.update_playlist_songs(playlist_id, updated_songs)
+        # Add all songs from YouTube in correct order
+        for song in songs:
+            if song['id'] in old_ids:
+                # Check if we have cached metadata, otherwise re-fetch
+                cached_info = self.yt_streamer._get_cached_metadata(song['id'])
+                if cached_info:
+                    updated_songs.append(cached_info)
+                else:
+                    # Cache was cleared, re-fetch metadata for existing song
+                    print(f"Re-fetching metadata for existing song: {song['id']}")
+                    full_info = self.yt_streamer.fetch_full_song_info(song['url'])
+                    if full_info:
+                        updated_songs.append(full_info)
+                    else:
+                        # Fallback to existing data if fetch fails
+                        existing_song = next(s for s in old_songs if s['id'] == song['id'])
+                        updated_songs.append(existing_song)
+            else:
+                # New song - fetch full info
+                cached_info = self.yt_streamer._get_cached_metadata(song['id'])
+                if cached_info:
+                    updated_songs.append(cached_info)
+                else:
+                    print(f"Fetching full info for new song: {song['id']}")
+                    full_info = self.yt_streamer.fetch_full_song_info(song['url'])
+                    if full_info:
+                        updated_songs.append(full_info)
+        
+        # Update the entire playlist with the new song order
+        self.main_logic.playlist_manager.update_playlist_songs(playlist_id, updated_songs)
 
         # Update metadata
         self._update_playlist_metadata(playlist_id, playlist_name, thumbnail)
@@ -75,10 +100,15 @@ class YouTubeController:
         """Create a new playlist from YouTube data."""
         full_songs = []
         for song in songs:
-            print(f"Fetching full info for new song: {song['id']}")
-            full_info = self.yt_streamer.fetch_full_song_info(song['url'])
-            if full_info:
-                full_songs.append(full_info)
+            # Check cache first
+            cached_info = self.yt_streamer._get_cached_metadata(song['id'])
+            if cached_info:
+                full_songs.append(cached_info)
+            else:
+                print(f"Fetching full info for new song: {song['id']}")
+                full_info = self.yt_streamer.fetch_full_song_info(song['url'])
+                if full_info:
+                    full_songs.append(full_info)
         
         playlist_id = self.main_logic.playlist_manager.add_new_playlist(
             playlist_name, full_songs, source_url, thumbnail
@@ -95,13 +125,18 @@ class YouTubeController:
 
     def _update_playlist_metadata(self, playlist_id, playlist_name, thumbnail):
         """Update playlist metadata (name and thumbnail)."""
-        playlist_data = self.main_logic.playlist_manager.get_all_playlists().get(playlist_id, {})
-        
-        if playlist_data.get("name") != playlist_name:
-            playlist_data["name"] = playlist_name
+        playlists = self.main_logic.playlist_manager.get_all_playlists()
+        if playlist_id in playlists:
+            playlist_data = playlists[playlist_id]
             
-        if thumbnail and playlist_data.get("thumbnail") != thumbnail:
-            playlist_data["thumbnail"] = thumbnail
+            if playlist_data.get("name") != playlist_name:
+                playlist_data["name"] = playlist_name
+                
+            if thumbnail and playlist_data.get("thumbnail") != thumbnail:
+                playlist_data["thumbnail"] = thumbnail
+                
+            # Save changes
+            self.main_logic.playlist_manager.save_playlists()
 
     def _update_ui_after_playlist_sync(self, playlist_id, playlist_name, added_ids, removed_ids):
         """Update UI after playlist synchronization."""
@@ -164,6 +199,29 @@ class YouTubeController:
 
         threading.Thread(target=process_link, daemon=True).start()
 
+    def _find_duplicate_playlist_by_content(self, new_songs):
+        """Find existing playlist with similar content when URL check fails."""
+        if not new_songs:
+            return None
+            
+        new_song_ids = {song['id'] for song in new_songs if song.get('id')}
+        if not new_song_ids:
+            return None
+            
+        # Check each existing playlist for content similarity
+        for playlist_id, playlist_data in self.main_logic.playlist_manager.playlists.items():
+            existing_songs = playlist_data.get('songs', [])
+            existing_song_ids = {song['id'] for song in existing_songs if song.get('id')}
+            
+            # If 80% or more songs match, consider it a duplicate
+            if existing_song_ids and new_song_ids:
+                overlap = len(new_song_ids & existing_song_ids)
+                similarity = overlap / max(len(new_song_ids), len(existing_song_ids))
+                if similarity >= 0.8:
+                    return playlist_id
+                    
+        return None
+
     def _show_fetch_error(self, message):
         """Show error message for fetch failures."""
         self.ui.after(0, self.ui.hide_loading)
@@ -175,8 +233,8 @@ class YouTubeController:
             self.ui.show_info("Sync Error", "Please select a playlist to sync first.")
             return
 
-        playlist_data = self.main_logic.playlist_controller.get_playlist_info(
-            self.main_logic.current_playlist_id
+        playlist_data = self.main_logic.playlist_manager.get_all_playlists().get(
+            self.main_logic.current_playlist_id, {}
         )
         url = playlist_data.get('source_url')
 
@@ -208,4 +266,6 @@ class YouTubeController:
             ))
         
         threading.Thread(target=cache_tracks, daemon=True).start()
+    
+
     

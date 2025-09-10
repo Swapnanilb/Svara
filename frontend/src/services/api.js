@@ -4,7 +4,7 @@ const API_BASE_URL = 'http://127.0.0.1:5001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 20000,
 });
 
 // Add response interceptor for better error handling
@@ -89,7 +89,7 @@ export const musicAPI = {
     const response = await api.post('/song/check', {
       url,
       playlist_id: playlistId
-    });
+    }, { timeout: 30000 }); // 30 second timeout for song operations
     return response.data;
   },
 
@@ -98,7 +98,7 @@ export const musicAPI = {
       url,
       playlist_id: playlistId,
       playlist_name: playlistName
-    });
+    }, { timeout: 60000 }); // 60 second timeout for song addition
     return response.data;
   },
 
@@ -112,13 +112,38 @@ export const musicAPI = {
       playlist_id: playlistId,
       song_index: 0
     });
+    // Preload songs in background
+    this.preloadPlaylist(playlistId).catch(console.error);
     return response.data;
   },
 
-  async refreshPlaylist(playlistId, sourceUrl) {
-    const response = await api.post('/playlist/add', { url: sourceUrl });
+  async refreshPlaylist(playlistId) {
+    const response = await api.post(`/playlist/${playlistId}/refresh`);
+    return response.data;
+  },
+
+  async preloadPlaylist(playlistId) {
+    const response = await api.post('/playlist/preload', {
+      playlist_id: playlistId,
+      song_index: 0
+    });
+    return response.data;
+  },
+
+  async deletePlaylist(playlistId) {
+    const response = await api.delete(`/playlist/${playlistId}`);
     return response.data;
   }
+};
+
+export const getCacheStats = async () => {
+  const response = await api.get('/cache/stats');
+  return response.data;
+};
+
+export const clearCache = async () => {
+  const response = await api.post('/cache/clear');
+  return response.data;
 };
 
 export default api;

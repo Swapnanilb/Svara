@@ -35,6 +35,8 @@ A modern, feature-rich music player built with React, Python, and Electron that 
 - **Optimized Refresh**: Smart sync that only checks for added/deleted songs
 - **Persistent State**: Remembers theme preference and player state
 - **Cross-Platform**: Runs as web app, desktop app, or Electron distribution
+- **Performance Monitoring**: Real-time metrics tracking for optimization
+- **Smart Caching**: Intelligent caching system with hit rate monitoring
 
 ## 🏗️ Project Structure
 ```
@@ -43,13 +45,17 @@ music-player-app/
 │   ├── api_server.py               # FastAPI server with all endpoints
 │   ├── music_player_logic.py       # Core music player logic
 │   ├── logic/                      # Modular controller architecture
-│   │   ├── playback_controller.py
-│   │   ├── playlist_controller.py
-│   │   ├── youtube_controller.py
-│   │   └── ui_controller.py
+│   │   ├── playback_controller.py  # Playback control logic
+│   │   ├── playlist_controller.py  # Playlist management
+│   │   ├── progress_tracker.py     # Progress tracking system
+│   │   ├── youtube_controller.py   # YouTube integration
+│   │   └── ui_controller.py        # UI state management
+│   ├── utils/                      # Utility modules
+│   │   └── text_utils.py           # Text processing utilities
 │   ├── player.py                   # VLC media player integration
 │   ├── playlist_manager.py         # Playlist data management
 │   ├── youtube_streamer.py         # YouTube API integration
+│   ├── performance_logger.py       # Performance monitoring system
 │   └── requirements.txt            # Python dependencies
 ├── frontend/                       # React Application
 │   ├── src/
@@ -66,8 +72,11 @@ music-player-app/
 │   └── package.json
 ├── electron/                       # Electron Desktop Wrapper
 │   ├── main.js                     # Electron main process
+│   ├── preload.js                  # Preload script for security
 │   └── package.json                # Electron configuration
-└── build.py                        # Build automation script
+├── build.py                        # Build automation script
+├── run-dev.bat                     # Development environment startup
+└── start-backend.bat               # Backend-only startup script
 ```
 
 ## 🚀 Quick Start
@@ -76,6 +85,15 @@ music-player-app/
 - Python 3.8+
 - Node.js 16+
 - VLC Media Player installed
+
+### Quick Development Start
+```bash
+# Windows - Start full development environment
+run-dev.bat
+
+# Or start backend only
+start-backend.bat
+```
 
 ### 1. Backend Setup
 ```bash
@@ -149,17 +167,13 @@ npm run dev
 
 ### Building for Production
 ```bash
-# Backend executable
-cd backend
-pyinstaller --onefile api_server.py
+# Build all components
+python build.py
 
-# Frontend build
-cd frontend
-npm run build
-
-# Electron distribution
-cd electron
-npm run build
+# Or build specific components
+python build.py --backend
+python build.py --frontend
+python build.py --electron
 ```
 
 ### Architecture Notes
@@ -170,6 +184,9 @@ npm run build
 - **API-First Design**: Clean separation between FastAPI backend and React frontend
 - **Theme System**: CSS custom properties for dynamic theming
 - **Cross-Platform Support**: Deployable as web app, desktop app, or Electron distribution
+- **Performance Monitoring**: Built-in metrics tracking and performance analysis
+- **Thread Management**: Safe progress tracking with proper cleanup
+- **Utility Architecture**: Modular utilities for text processing and system monitoring
 
 ## 🤝 Contributing
 

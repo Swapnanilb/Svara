@@ -50,6 +50,7 @@ class PlaylistManager:
             self.playlists[playlist_id]["songs"].append(song_info)
             self.save_playlists()
             return True
+        return False  # Playlist doesn't exist
 
     def remove_song_from_playlist(self, playlist_id, song_index):
         if playlist_id in self.playlists and 0 <= song_index < len(self.playlists[playlist_id]['songs']):

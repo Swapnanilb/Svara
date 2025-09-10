@@ -104,7 +104,7 @@ const SongsView = ({ status, onStatusUpdate, theme }) => {
           Tracklist ({songs.length} songs)
         </h3>
         
-        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+        <div style={{ maxHeight: '400px', overflowY: 'auto', paddingTop: '2px' }}>
           {songs.map((song, index) => (
             <div
               key={index}

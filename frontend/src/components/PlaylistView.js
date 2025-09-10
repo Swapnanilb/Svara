@@ -1,6 +1,118 @@
 import React, { useState, useEffect } from 'react';
 import { musicAPI } from '../services/api';
 
+const PlaylistDropdown = ({ playlistId, playlist, onRefresh, onDelete, refreshing, theme }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = () => setIsOpen(false);
+    if (isOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isOpen]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(!isOpen);
+        }}
+        style={{
+          background: 'rgba(0, 0, 0, 0.7)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '32px',
+          height: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: 'white'
+        }}
+      >
+        ⋮
+      </button>
+      {isOpen && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            right: 0,
+            background: theme === 'dark' ? '#2a2a2a' : '#ffffff',
+            border: `1px solid ${theme === 'dark' ? '#404040' : '#e8e9ea'}`,
+            borderRadius: '8px',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)',
+            zIndex: 1000,
+            minWidth: '120px',
+            overflow: 'hidden'
+          }}
+        >
+          {playlist.source_url && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+                onRefresh();
+              }}
+              disabled={refreshing}
+              style={{
+                width: '100%',
+                padding: '10px 15px',
+                border: 'none',
+                background: 'transparent',
+                color: theme === 'dark' ? '#fff' : '#333',
+                cursor: refreshing ? 'not-allowed' : 'pointer',
+                textAlign: 'left',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => !refreshing && (e.target.style.background = theme === 'dark' ? '#404040' : '#f5f5f5')}
+              onMouseLeave={(e) => !refreshing && (e.target.style.background = 'transparent')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>
+                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+              </svg>
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+              onDelete();
+            }}
+            style={{
+              width: '100%',
+              padding: '10px 15px',
+              border: 'none',
+              background: 'transparent',
+              color: '#ff4444',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => e.target.style.background = theme === 'dark' ? '#404040' : '#f5f5f5'}
+            onMouseLeave={(e) => e.target.style.background = 'transparent'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }) => {
   const [playlists, setPlaylists] = useState({});
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -8,13 +120,17 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
   const [refreshingPlaylist, setRefreshingPlaylist] = useState(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [showRefreshOverlay, setShowRefreshOverlay] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState(null);
 
 
   useEffect(() => {
     loadPlaylists();
   }, []);
 
-  const loadPlaylists = async () => { const response = await musicAPI.getPlaylists(); setPlaylists(response.playlists); };
+  const loadPlaylists = async () => { 
+    const response = await musicAPI.getPlaylists(); 
+    setPlaylists(response.playlists); 
+  };
   const selectPlaylist = async (playlistId) => {
     try {
       await musicAPI.loadPlaylist(playlistId);
@@ -31,6 +147,8 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
   const playPlaylist = async (playlistId, e) => {
     e.stopPropagation();
     try {
+      // Preload playlist in background before playing
+      musicAPI.preloadPlaylist(playlistId).catch(console.error);
       await musicAPI.play(playlistId, 0);
       onStatusUpdate();
     } catch (error) {
@@ -38,24 +156,42 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
     }
   };
 
-  const refreshPlaylist = async (playlistId, e) => {
-    e.stopPropagation();
+  const refreshPlaylist = async (playlistId) => {
     const playlist = playlists[playlistId];
     if (!playlist?.source_url) return;
     
     setRefreshingPlaylist(playlistId);
     onShowOverlay(true);
     try {
-      await musicAPI.refreshPlaylist(playlistId, playlist.source_url);
-      // Wait a bit for backend processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await loadPlaylists();
+      const refreshResult = await musicAPI.refreshPlaylist(playlistId);
+      
+      const response = await musicAPI.getPlaylists();
+      setPlaylists({...response.playlists});
+      
+      // Show refresh statistics popup
+      const added = refreshResult.added ?? 0;
+      const removed = refreshResult.removed ?? 0;
+      const message = `Playlist refreshed: ${added} songs added, ${removed} songs removed`;
+      setRefreshMessage(message);
+      setTimeout(() => setRefreshMessage(null), 4000);
+      
       onShowOverlay(false);
-      setTimeout(() => setRefreshingPlaylist(null), 1000);
+      setTimeout(() => setRefreshingPlaylist(null), 500);
     } catch (error) {
       console.log('Error refreshing playlist:', error);
       setRefreshingPlaylist(null);
       onShowOverlay(false);
+    }
+  };
+
+  const deletePlaylist = async (playlistId) => {
+    if (!window.confirm('Are you sure you want to delete this playlist?')) return;
+    
+    try {
+      await musicAPI.deletePlaylist(playlistId);
+      await loadPlaylists();
+    } catch (error) {
+      console.log('Error deleting playlist:', error);
     }
   };
 
@@ -83,6 +219,24 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
 
   return (
     <>
+      {refreshMessage && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: theme === 'dark' ? '#2a2a2a' : '#ffffff',
+          color: theme === 'dark' ? '#fff' : '#333',
+          padding: '15px 20px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0, 0, 0, 0.2)',
+          border: '2px solid #ff6b35',
+          zIndex: 1000,
+          fontSize: '14px',
+          fontWeight: '600'
+        }}>
+          {refreshMessage}
+        </div>
+      )}
       <div style={{ padding: '30px' }}>
       {/* Playlists List */}
       <div style={{ marginBottom: '40px' }}>
@@ -155,39 +309,14 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
                   </svg>
                 )}
                 <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', gap: '8px' }}>
-                  {playlist.source_url && (
-                    <button
-                      onClick={(e) => refreshPlaylist(id, e)}
-                      disabled={refreshingPlaylist === id}
-                      style={{
-                        background: refreshingPlaylist === id ? 'rgba(76, 175, 80, 0.8)' : 'rgba(0, 0, 0, 0.7)',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '32px',
-                        height: '32px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: refreshingPlaylist === id ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.3s ease',
-                        color: 'white',
-                        fontSize: '12px'
-                      }}
-                      onMouseEnter={(e) => refreshingPlaylist !== id && (e.target.style.transform = 'scale(1.1)')}
-                      onMouseLeave={(e) => refreshingPlaylist !== id && (e.target.style.transform = 'scale(1)')}
-                      title={refreshingPlaylist === id ? 'Refreshing...' : 'Refresh from YouTube'}
-                    >
-                      {refreshingPlaylist === id ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
-                        </svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ animation: refreshingPlaylist === id ? 'spin 1s linear infinite' : 'none' }}>
-                          <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                        </svg>
-                      )}
-                    </button>
-                  )}
+                  <PlaylistDropdown
+                    playlistId={id}
+                    playlist={playlist}
+                    onRefresh={() => refreshPlaylist(id)}
+                    onDelete={() => deletePlaylist(id)}
+                    refreshing={refreshingPlaylist === id}
+                    theme={theme}
+                  />
                   <button
                     onClick={(e) => playPlaylist(id, e)}
                     style={{
