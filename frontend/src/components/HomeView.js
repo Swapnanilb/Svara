@@ -5,7 +5,7 @@ const HomeView = ({ onStatusUpdate, theme }) => {
   const [newUrl, setNewUrl] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [showPlaylistDialog, setShowPlaylistDialog] = useState(false);
-  const [songInfo, setSongInfo] = useState(null);
+
   const [playlists, setPlaylists] = useState([]);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [loading, setLoading] = useState(false);

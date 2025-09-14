@@ -22,8 +22,8 @@ class MusicPlayer:
         self.event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end)
         
     def _on_media_end(self, event):
-        # Schedule the callback to run on the main thread
-        self.app.after(0, self.on_song_end_callback)
+        # Use threading to avoid UI callback issues
+        threading.Thread(target=self.on_song_end_callback, daemon=True).start()
 
     def play_song(self, song_info):
         """Plays a song given its dictionary (which contains the 'url')."""

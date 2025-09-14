@@ -97,6 +97,28 @@ const SettingsView = ({ theme, onThemeChange }) => {
           Cache Management
         </h3>
         
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+          <button
+            onClick={loadCacheStats}
+            style={{
+              padding: '8px 16px',
+              border: '1px solid #4CAF50',
+              borderRadius: '6px',
+              background: 'transparent',
+              color: '#4CAF50',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            Refresh Stats
+          </button>
+          {cacheStats && (
+            <span style={{ fontSize: '12px', opacity: 0.7 }}>
+              URL: {cacheStats.url_cache_count} | Metadata: {cacheStats.metadata_cache_count}
+            </span>
+          )}
+        </div>
+        
         {cacheStats && (
           <div style={{
             background: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',

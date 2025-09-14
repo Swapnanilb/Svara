@@ -63,7 +63,12 @@ class HeadlessUI:
     def show_error(self, title, message): print(f"Error {title}: {message}")
     def show_add_song_dialog(self, song_info): print(f"Song ready: {song_info.get('title')}")
     def load_playlist_cards(self): pass
-    def after(self, delay, callback): callback() if callable(callback) else None
+    def after(self, delay, callback): 
+        try:
+            if callable(callback):
+                callback()
+        except Exception as e:
+            print(f"Error in callback: {e}")
     def update_playlist_card_colors(self, playlist_id): pass
     def update_tracklist(self, songs, filtered_songs=None): pass
     def update_selected_song(self, index): pass
@@ -107,7 +112,9 @@ async def get_status():
         "duration": duration,
         "current_playlist_id": logic.current_playlist_id,
         "current_song_index": logic.current_song_index,
-        "is_muted": ui_handler.is_muted
+        "is_muted": ui_handler.is_muted,
+        "is_shuffled": logic.playback_controller.is_shuffled,
+        "is_repeated": logic.playback_controller.is_repeated
     }
 
 @app.get("/api/playlists")
@@ -328,12 +335,20 @@ async def get_playlist_songs(playlist_id: str):
 @app.post("/api/shuffle")
 async def toggle_shuffle():
     logic.toggle_shuffle()
-    return {"message": "Shuffle toggled"}
+    return {
+        "message": "Shuffle toggled",
+        "is_shuffled": logic.playback_controller.is_shuffled,
+        "is_repeated": logic.playback_controller.is_repeated
+    }
 
 @app.post("/api/repeat")
 async def toggle_repeat():
     logic.toggle_repeat()
-    return {"message": "Repeat toggled"}
+    return {
+        "message": "Repeat toggled",
+        "is_shuffled": logic.playback_controller.is_shuffled,
+        "is_repeated": logic.playback_controller.is_repeated
+    }
 
 @app.post("/api/mute")
 async def toggle_mute():
@@ -415,21 +430,21 @@ async def get_cache_stats():
     url_cache_file = "song_url_cache.json"
     if os.path.exists(url_cache_file):
         try:
-            with open(url_cache_file, 'r') as f:
+            with open(url_cache_file, 'r', encoding='utf-8') as f:
                 url_cache = json.load(f)
                 url_cache_count = len(url_cache)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error reading URL cache: {e}")
     
     # Count metadata cache entries
     metadata_cache_file = "song_metadata_cache.json"
     if os.path.exists(metadata_cache_file):
         try:
-            with open(metadata_cache_file, 'r') as f:
+            with open(metadata_cache_file, 'r', encoding='utf-8') as f:
                 metadata_cache = json.load(f)
                 metadata_cache_count = len(metadata_cache)
-        except:
-            pass
+        except Exception as e:
+            print(f"Error reading metadata cache: {e}")
     
     return {
         "url_cache_count": url_cache_count,
@@ -443,28 +458,35 @@ async def clear_cache():
     
     files_cleared = []
     
-    # Clear URL cache
-    url_cache_file = "song_url_cache.json"
-    if os.path.exists(url_cache_file):
-        os.remove(url_cache_file)
-        files_cleared.append("URL cache")
-    
-    # Clear metadata cache
-    metadata_cache_file = "song_metadata_cache.json"
-    if os.path.exists(metadata_cache_file):
-        os.remove(metadata_cache_file)
-        files_cleared.append("Metadata cache")
-    
-    # Clear in-memory caches
-    if hasattr(logic.youtube_controller.yt_streamer, 'url_cache'):
-        logic.youtube_controller.yt_streamer.url_cache.clear()
-    if hasattr(logic.youtube_controller.yt_streamer, 'metadata_cache'):
-        logic.youtube_controller.yt_streamer.metadata_cache.clear()
-    
-    return {
-        "message": "Cache cleared",
-        "cleared": files_cleared
-    }
+    try:
+        # Clear URL cache
+        url_cache_file = "song_url_cache.json"
+        if os.path.exists(url_cache_file):
+            os.remove(url_cache_file)
+            files_cleared.append("URL cache")
+        
+        # Clear metadata cache
+        metadata_cache_file = "song_metadata_cache.json"
+        if os.path.exists(metadata_cache_file):
+            os.remove(metadata_cache_file)
+            files_cleared.append("Metadata cache")
+        
+        # Clear in-memory caches
+        if hasattr(logic.youtube_controller.yt_streamer, 'url_cache'):
+            logic.youtube_controller.yt_streamer.url_cache.clear()
+        if hasattr(logic.youtube_controller.yt_streamer, 'metadata_cache'):
+            logic.youtube_controller.yt_streamer.metadata_cache.clear()
+        
+        return {
+            "message": "Cache cleared",
+            "cleared": files_cleared
+        }
+    except Exception as e:
+        print(f"Error clearing cache: {e}")
+        return {
+            "message": "Error clearing cache",
+            "error": str(e)
+        }
 
 # Register shutdown handler
 def shutdown_handler():

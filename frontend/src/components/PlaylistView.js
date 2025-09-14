@@ -116,10 +116,10 @@ const PlaylistDropdown = ({ playlistId, playlist, onRefresh, onDelete, refreshin
 const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }) => {
   const [playlists, setPlaylists] = useState({});
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
-  const [songs, setSongs] = useState([]);
+
   const [refreshingPlaylist, setRefreshingPlaylist] = useState(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
-  const [showRefreshOverlay, setShowRefreshOverlay] = useState(false);
+
   const [refreshMessage, setRefreshMessage] = useState(null);
 
 
@@ -206,15 +206,7 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
       setRefreshingAll(false);
     }
   };
-  const playSong = async (songIndex) => { 
-    if (!selectedPlaylist) return; 
-    try {
-      await musicAPI.play(selectedPlaylist, songIndex); 
-    } catch (error) {
-      console.log('Play request sent, checking status...'); 
-    }
-    onStatusUpdate(); 
-  };
+
 
 
   return (
@@ -367,14 +359,6 @@ const playlistCardStyle = {
   backdropFilter: 'blur(10px)'
 };
 
-const songItemStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  padding: '18px',
-  borderRadius: '16px',
-  cursor: 'pointer',
-  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  backdropFilter: 'blur(10px)'
-};
+
 
 export default PlaylistView;

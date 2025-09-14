@@ -57,12 +57,29 @@ class PlaybackController:
 
     def play_next_song(self):
         """Play the next song based on current mode (shuffle/repeat)."""
-        songs = self.main_logic.playlist_manager.get_songs(self.main_logic.current_playlist_id)
-        if not songs:
-            return
+        try:
+            if not self.main_logic.current_playlist_id:
+                print("No current playlist, stopping playback")
+                self.music_player.stop()
+                return
+                
+            songs = self.main_logic.playlist_manager.get_songs(self.main_logic.current_playlist_id)
+            if not songs:
+                print("No songs in playlist, stopping playback")
+                self.music_player.stop()
+                return
 
-        next_index = self._calculate_next_song_index(songs)
-        self.play_song_by_index(next_index)
+            next_index = self._calculate_next_song_index(songs)
+            if next_index == -1:
+                print("Reached end of playlist, stopping playback")
+                self.music_player.stop()
+                self.ui.reset_now_playing_view()
+                return
+            
+            self.play_song_by_index(next_index)
+        except Exception as e:
+            print(f"Error in play_next_song: {e}")
+            self.music_player.stop()
 
     def _calculate_next_song_index(self, songs):
         """Calculate the next song index based on playback mode."""
@@ -71,7 +88,10 @@ class PlaybackController:
         elif self.is_shuffled:
             return self._get_next_shuffled_index(songs)
         else:
-            return (self.main_logic.current_song_index + 1) % len(songs)
+            next_index = self.main_logic.current_song_index + 1
+            if next_index >= len(songs):
+                return -1  # Signal end of playlist
+            return next_index
 
     def _get_next_shuffled_index(self, songs):
         """Get the next index for shuffle mode."""
@@ -144,6 +164,11 @@ class PlaybackController:
         self.is_shuffled = not self.is_shuffled
         
         if self.is_shuffled:
+            # Disable repeat when shuffle is enabled
+            self.is_repeated = False
+            self.ui.update_repeat_button(self.is_repeated)
+            print("🔀 Shuffle ON | 🔁 Repeat OFF")
+            
             songs = self.main_logic.playlist_manager.get_songs(self.main_logic.current_playlist_id)
             if songs:
                 self.shuffled_indices = list(range(len(songs)))
@@ -152,15 +177,25 @@ class PlaybackController:
         else:
             self.shuffled_indices = []
             self.current_shuffled_index = -1
+            print("🔀 Shuffle OFF")
 
         self.ui.update_shuffle_button(self.is_shuffled)
-        print(f"Shuffle is now {'on' if self.is_shuffled else 'off'}")
 
     def toggle_repeat(self):
         """Toggle repeat mode on/off."""
         self.is_repeated = not self.is_repeated
+        
+        if self.is_repeated:
+            # Disable shuffle when repeat is enabled
+            self.is_shuffled = False
+            self.shuffled_indices = []
+            self.current_shuffled_index = -1
+            self.ui.update_shuffle_button(self.is_shuffled)
+            print("🔁 Repeat ON | 🔀 Shuffle OFF")
+        else:
+            print("🔁 Repeat OFF")
+        
         self.ui.update_repeat_button(self.is_repeated)
-        print(f"Repeat is now {'on' if self.is_repeated else 'off'}")
 
     def set_volume(self, volume):
         """Set the playback volume."""

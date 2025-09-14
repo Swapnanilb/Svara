@@ -7,16 +7,27 @@ const PlayerControls = ({ status, onStatusUpdate, theme }) => {
   const [localVolume, setLocalVolume] = React.useState(null);
   const [isRepeat, setIsRepeat] = React.useState(false);
   const [isShuffle, setIsShuffle] = React.useState(false);
+
   const handlePlayPause = async () => { try { await musicAPI.togglePause(); } catch {} onStatusUpdate(); };
   const handleNext = async () => { try { await musicAPI.nextSong(); } catch {} onStatusUpdate(); };
   const handlePrevious = async () => { try { await musicAPI.previousSong(); } catch {} onStatusUpdate(); };
   const handleForward = async () => { try { await musicAPI.seek((status?.position / 1000 || 0) + 10); } catch {} onStatusUpdate(); };
   const handleBackward = async () => { try { await musicAPI.seek(Math.max(0, (status?.position / 1000 || 0) - 10)); } catch {} onStatusUpdate(); };
   const handleRepeat = async () => { 
-    try { await musicAPI.toggleRepeat(); setIsRepeat(!isRepeat); } catch {} 
+    try { 
+      const response = await musicAPI.toggleRepeat(); 
+      setIsRepeat(response.is_repeated);
+      setIsShuffle(response.is_shuffled);
+
+    } catch {} 
   };
   const handleShuffle = async () => { 
-    try { await musicAPI.toggleShuffle(); setIsShuffle(!isShuffle); } catch {} 
+    try { 
+      const response = await musicAPI.toggleShuffle(); 
+      setIsShuffle(response.is_shuffled);
+      setIsRepeat(response.is_repeated);
+
+    } catch {} 
   };
   const handleVolumeChange = async (e) => {
     const volume = parseFloat(e.target.value);
@@ -55,7 +66,15 @@ const PlayerControls = ({ status, onStatusUpdate, theme }) => {
     if (localVolume === null) {
       setLocalVolume(status?.volume ?? 0.5);
     }
-  }, [status?.position, status?.volume, isDragging, localVolume]);
+    // Sync shuffle/repeat states with backend
+    if (status?.is_shuffled !== undefined) {
+      setIsShuffle(status.is_shuffled);
+    }
+    if (status?.is_repeated !== undefined) {
+      setIsRepeat(status.is_repeated);
+    }
+
+  }, [status?.position, status?.volume, status?.is_shuffled, status?.is_repeated, isDragging, localVolume]);
 
   const formatTime = (s) => `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`;
 
@@ -96,9 +115,9 @@ const PlayerControls = ({ status, onStatusUpdate, theme }) => {
       {/* Center: Controls & Progress */}
       <div style={centerSection}>
         <div style={controlsStyle}>
-          <button onClick={handleShuffle} style={{...buttonStyle, opacity: isShuffle ? 1 : 0.5}}>
+          <button onClick={handleShuffle} style={{...buttonStyle, opacity: isShuffle ? 1 : 0.5}} title={isShuffle ? 'Shuffle On' : 'Shuffle Off'}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke={isShuffle ? '#ff6b35' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" filter={isShuffle ? 'drop-shadow(0 0 4px #ff6b35)' : 'none'}/>
             </svg>
           </button>
           <button onClick={handleBackward} style={buttonStyle}>
@@ -137,9 +156,9 @@ const PlayerControls = ({ status, onStatusUpdate, theme }) => {
               <path d="M13 5l7 7-7 7M6 5l7 7-7 7" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <button onClick={handleRepeat} style={{...buttonStyle, opacity: isRepeat ? 1 : 0.5}}>
+          <button onClick={handleRepeat} style={{...buttonStyle, opacity: isRepeat ? 1 : 0.5}} title={isRepeat ? 'Repeat On' : 'Repeat Off'}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3" stroke={isRepeat ? '#ff6b35' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" filter={isRepeat ? 'drop-shadow(0 0 4px #ff6b35)' : 'none'}/>
             </svg>
           </button>
         </div>
@@ -328,5 +347,7 @@ const volumeSliderStyle = {
   WebkitAppearance: 'none',
   background: 'linear-gradient(to right, #ff6b35 0%, #ff6b35 var(--volume, 50%), #e0e0e0 var(--volume, 50%), #e0e0e0 100%)'
 };
+
+
 
 export default PlayerControls;
