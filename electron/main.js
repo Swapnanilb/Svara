@@ -23,6 +23,11 @@ function createWindow() {
     show: false // Don't show until ready
   });
 
+  // Hide menu bar in production
+  if (!isDev) {
+    mainWindow.setMenuBarVisibility(false);
+  }
+
   // Load the React app
   if (isDev) {
     // Development: Load from React dev server
@@ -30,7 +35,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   } else {
     // Production: Load from built React app
-    const indexPath = path.join(__dirname, 'resources/frontend/build/index.html');
+    const indexPath = path.join(__dirname, '../frontend/build/index.html');
     mainWindow.loadFile(indexPath);
   }
 
@@ -70,70 +75,84 @@ function startBackend() {
       }
     } else {
       // Production: Run compiled executable
-      backendPath = path.join(__dirname, 'resources/backend/api_server.exe');
+      backendPath = path.join(process.resourcesPath, 'music_player_backend.exe');
       
-      if (!fs.existsSync(backendPath)) {
-        // Fallback to process resources
-        backendPath = path.join(process.resourcesPath, 'backend/api_server.exe');
+      // Set VLC paths if bundled
+      const vlcPath = path.join(__dirname, '../vlc');
+      if (fs.existsSync(vlcPath)) {
+        process.env.VLC_PLUGIN_PATH = path.join(vlcPath, 'plugins');
+        process.env.PATH = vlcPath + ';' + process.env.PATH;
+        console.log('VLC path added to PATH:', vlcPath);
+        console.log('VLC plugins path set to:', process.env.VLC_PLUGIN_PATH);
       }
+      console.log('Looking for backend at:', backendPath);
+      console.log('Backend exists:', fs.existsSync(backendPath));
       
       if (!fs.existsSync(backendPath)) {
         reject(new Error(`Backend executable not found at ${backendPath}`));
         return;
       }
       
+      console.log('Starting backend process...');
+      
       backendProcess = spawn(backendPath, [], {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        detached: false
       });
+      
+      console.log('Backend process spawned, PID:', backendProcess.pid);
+      
+      backendProcess.stdout.on('data', (data) => {
+        console.log(`Backend: ${data}`);
+      });
+
+      backendProcess.stderr.on('data', (data) => {
+        console.error(`Backend Error: ${data}`);
+      });
+
+      backendProcess.on('error', (error) => {
+        console.error('Failed to start backend:', error);
+        reject(error);
+      });
+
+      backendProcess.on('close', (code) => {
+        console.log(`Backend process exited with code ${code}`);
+      });
+
+      // Give backend time to start
+      setTimeout(() => {
+        if (backendProcess && !backendProcess.killed) {
+          resolve();
+        } else {
+          reject(new Error('Backend failed to start'));
+        }
+      }, 3000);
     }
-
-    backendProcess.stdout.on('data', (data) => {
-      console.log(`Backend: ${data}`);
-    });
-
-    backendProcess.stderr.on('data', (data) => {
-      console.error(`Backend Error: ${data}`);
-    });
-
-    backendProcess.on('error', (error) => {
-      console.error('Failed to start backend:', error);
-      reject(error);
-    });
-
-    backendProcess.on('close', (code) => {
-      console.log(`Backend process exited with code ${code}`);
-    });
-
-    // Give backend time to start
-    setTimeout(() => {
-      if (backendProcess && !backendProcess.killed) {
-        resolve();
-      } else {
-        reject(new Error('Backend failed to start'));
-      }
-    }, 3000);
   });
 }
 
 async function stopBackend() {
-  // First try to stop music playback gracefully
-  try {
-    const response = await fetch('http://127.0.0.1:5001/api/stop', { method: 'POST' });
-    console.log('Music stopped');
-  } catch (error) {
-    console.log('Could not stop music gracefully');
+  if (!isDev && process.platform === 'win32') {
+    // Production: Kill by port and process name
+    spawn('netstat', ['-ano'], { stdio: 'pipe' }).stdout.on('data', (data) => {
+      const lines = data.toString().split('\n');
+      lines.forEach(line => {
+        if (line.includes(':5001') && line.includes('LISTENING')) {
+          const pid = line.trim().split(/\s+/).pop();
+          if (pid && !isNaN(pid)) {
+            spawn('taskkill', ['/f', '/pid', pid], { stdio: 'ignore' });
+          }
+        }
+      });
+    });
+    
+    // Also kill by executable name
+    spawn('taskkill', ['/f', '/im', 'music_player_backend.exe'], { stdio: 'ignore' });
   }
   
   if (backendProcess && !backendProcess.killed) {
-    console.log('Stopping backend process...');
-    backendProcess.kill('SIGTERM');
-    
-    // Force kill after 2 seconds
-    setTimeout(() => {
-      if (backendProcess && !backendProcess.killed) {
-        backendProcess.kill('SIGKILL');
-      }
-    }, 2000);
+    backendProcess.kill('SIGKILL');
+    backendProcess = null;
   }
 }
 
@@ -158,9 +177,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   await stopBackend();
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
 });
 
 app.on('activate', () => {
@@ -169,17 +186,33 @@ app.on('activate', () => {
   }
 });
 
-app.on('before-quit', async () => {
+app.on('before-quit', async (event) => {
+  event.preventDefault();
   await stopBackend();
+  app.exit(0);
 });
 
 // Handle app termination
-process.on('SIGINT', () => {
-  stopBackend();
-  app.quit();
+process.on('SIGINT', async () => {
+  await stopBackend();
+  process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-  stopBackend();
-  app.quit();
+process.on('SIGTERM', async () => {
+  await stopBackend();
+  process.exit(0);
+});
+
+process.on('exit', () => {
+  if (!isDev && process.platform === 'win32') {
+    // Kill any process using port 5001
+    const { execSync } = require('child_process');
+    try {
+      execSync('for /f "tokens=5" %a in (\'netstat -ano ^| findstr :5001\') do taskkill /f /pid %a', { stdio: 'ignore' });
+    } catch (e) {}
+    
+    try {
+      execSync('taskkill /f /im music_player_backend.exe', { stdio: 'ignore' });
+    } catch (e) {}
+  }
 });

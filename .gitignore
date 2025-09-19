@@ -91,7 +91,7 @@ jspm_packages/
 
 # Electron
 out/
-dist/
+electron/dist/
 *.dmg
 *.exe
 *.deb
@@ -100,8 +100,10 @@ dist/
 
 # Build outputs
 frontend/build/
+frontend/dist/
 backend/dist/
 backend/build/
+dist/
 
 # Music Player specific
 backend/playlists.json
@@ -119,6 +121,7 @@ test/
 backend/performance_metrics.log
 backend/simple_log_viewer.py
 backend/view_logs.bat
+backend/vlc_setup.py
 
 # Cache files
 backend/song_url_cache.json
@@ -144,5 +147,7 @@ env.bak/
 venv.bak/
 
 
-
 SVARA-Music-Player/
+
+*.bat
+*.iss

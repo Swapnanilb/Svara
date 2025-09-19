@@ -11,10 +11,12 @@
   },
   "devDependencies": {
     "electron": "^27.0.0",
-    "electron-builder": "^24.6.4"
+    "electron-builder": "^24.6.4",
+    "electron-packager": "^17.1.2"
   },
+  "author": "SVARA Music Player",
   "build": {
-    "appId": "com.musicplayer.app",
+    "appId": "com.svara.musicplayer",
     "productName": "SVARA Music Player",
     "directories": {
       "output": "dist"
@@ -23,22 +25,17 @@
       "main.js",
       "preload.js"
     ],
-    "extraFiles": [
+    "extraResources": [
       {
         "from": "../frontend/build",
-        "to": "resources/frontend/build",
-        "filter": ["**/*"]
-      }
-    ],
-    "extraFiles": [
-      {
-        "from": "../frontend/build",
-        "to": "resources/frontend/build",
-        "filter": ["**/*"]
+        "to": "frontend/build",
+        "filter": [
+          "**/*"
+        ]
       },
       {
-        "from": "../backend/dist/api_server.exe",
-        "to": "resources/backend/api_server.exe"
+        "from": "../backend/dist/music_player_backend.exe",
+        "to": "music_player_backend.exe"
       }
     ],
     "win": {

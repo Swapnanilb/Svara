@@ -1,3 +1,7 @@
+# Setup VLC path before importing
+from vlc_setup import setup_vlc_path
+setup_vlc_path()
+
 import vlc
 import threading
 

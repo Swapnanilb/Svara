@@ -20,7 +20,7 @@ def run_command(cmd, cwd=None):
 def build_backend():
     backend_dir = Path("backend")
     return (run_command("pip install -r requirements.txt", cwd=backend_dir) and
-            run_command("pyinstaller --onefile --name api_server api_server.py", cwd=backend_dir))
+            run_command("pyinstaller api_server.spec", cwd=backend_dir))
 
 def build_frontend():
     frontend_dir = Path("frontend")

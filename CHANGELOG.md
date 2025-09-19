@@ -2,7 +2,7 @@
 
 All notable changes to SVARA Music Player will be documented in this file.
 
-## [2.0.0] - 2024-12-19
+## [1.0.0](https://github.com/Swapnanilb/Svara/releases/tag/v1.0.0) - 2025-09-20
 
 ### 🛠️ Technical Architecture Transformation
 - **Complete Platform Migration**: Transition from Python-only desktop app to modern Electron-based architecture
@@ -107,7 +107,7 @@ All notable changes to SVARA Music Player will be documented in this file.
 - **Build Automation**: Enhanced `build.py` with component-specific build options
 - **Performance Analysis**: Built-in log viewer and metrics analysis tools
 
-## [1.0.0] - 2024-11-15
+## [0.0.1] - 2025-08-24
 
 ### Initial Release
 - Basic YouTube music streaming functionality
