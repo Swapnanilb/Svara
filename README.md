@@ -206,3 +206,13 @@ MIT License - see LICENSE file for details
 - YouTube for music streaming
 - React and Electron communities
 - FastAPI for the robust backend framework
+
+
+---
+
+## 🙌 Credits
+Svara Music Player is developed with ❤️ by:  
+- **Swapnanil Basak** – Co - Creator & Lead Developer 
+- **Piyush** – Co - Creator & Lead Developer
+
+---
