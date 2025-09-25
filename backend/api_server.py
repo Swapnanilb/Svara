@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import time
 import atexit
+import json
 
 from music_player_logic import MusicPlayerLogic
 from performance_logger import perf_logger
@@ -90,6 +91,36 @@ class HeadlessUI:
 ui_handler = HeadlessUI()
 logic = MusicPlayerLogic(ui_handler)
 
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+    
+    async def send_progress(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps(message))
+            except:
+                pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
 @app.get("/")
 async def root():
     return {"message": "Music Player API Server"}
@@ -169,40 +200,13 @@ async def add_playlist(request: PlaylistRequest):
     if existing_playlist_id:
         return {"message": "Playlist already exists", "exists": True}
     
-    # Create event to wait for completion
-    add_complete = threading.Event()
-    result_data = {"exists": False, "message": "Playlist added successfully"}
+    # Set progress callback for WebSocket updates
+    logic.youtube_controller.progress_callback = manager.send_progress
     
-    # Override the update method to capture results
-    original_update_method = logic.youtube_controller._update_existing_playlist
-    original_create_method = logic.youtube_controller._create_new_playlist
+    # Start the add process
+    logic.add_from_link(request.url)
     
-    def capture_existing_update(playlist_id, playlist_name, songs, thumbnail):
-        result_data["exists"] = True
-        result_data["message"] = "Playlist already exists"
-        add_complete.set()
-        original_update_method(playlist_id, playlist_name, songs, thumbnail)
-    
-    def capture_new_create(playlist_name, songs, source_url, thumbnail):
-        add_complete.set()
-        original_create_method(playlist_name, songs, source_url, thumbnail)
-    
-    logic.youtube_controller._update_existing_playlist = capture_existing_update
-    logic.youtube_controller._create_new_playlist = capture_new_create
-    
-    try:
-        # Start the add process
-        logic.add_from_link(request.url)
-        
-        # Wait for completion (max 15 seconds for faster response)
-        if add_complete.wait(timeout=15):
-            return result_data
-        else:
-            return {"message": "Playlist added successfully", "exists": False}
-    finally:
-        # Restore original methods
-        logic.youtube_controller._update_existing_playlist = original_update_method
-        logic.youtube_controller._create_new_playlist = original_create_method
+    return {"message": "Processing started", "exists": False}
 
 @app.post("/api/playlist/{playlist_id}/refresh")
 async def refresh_playlist(playlist_id: str):

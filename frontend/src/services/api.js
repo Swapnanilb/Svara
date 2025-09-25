@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = 'http://127.0.0.1:5001/api';
+const WS_URL = 'ws://127.0.0.1:5001/ws';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -145,5 +146,42 @@ export const clearCache = async () => {
   const response = await api.post('/cache/clear');
   return response.data;
 };
+
+// WebSocket for real-time progress updates
+export class ProgressWebSocket {
+  constructor() {
+    this.ws = null;
+    this.onProgress = null;
+    this.onComplete = null;
+  }
+
+  connect(onProgress, onComplete) {
+    this.onProgress = onProgress;
+    this.onComplete = onComplete;
+    
+    this.ws = new WebSocket(WS_URL);
+    
+    this.ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'progress' && this.onProgress) {
+        this.onProgress(data);
+      } else if (data.type === 'complete' && this.onComplete) {
+        this.onComplete(data);
+      }
+    };
+    
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+  }
+
+  disconnect() {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+}
 
 export default api;

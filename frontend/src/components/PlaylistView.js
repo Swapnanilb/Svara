@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { musicAPI } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { musicAPI, ProgressWebSocket } from '../services/api';
 
 const PlaylistDropdown = ({ playlistId, playlist, onRefresh, onDelete, refreshing, theme }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -113,14 +113,15 @@ const PlaylistDropdown = ({ playlistId, playlist, onRefresh, onDelete, refreshin
   );
 };
 
-const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }) => {
+const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay, onGlobalLoading, onProgressData }) => {
   const [playlists, setPlaylists] = useState({});
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
 
   const [refreshingPlaylist, setRefreshingPlaylist] = useState(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
-
   const [refreshMessage, setRefreshMessage] = useState(null);
+  // Removed local progressData - using global state now
+  const wsRef = useRef(null);
 
 
   useEffect(() => {
@@ -162,25 +163,41 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
     
     setRefreshingPlaylist(playlistId);
     onShowOverlay(true);
+    
+    // Setup WebSocket for progress tracking
+    wsRef.current = new ProgressWebSocket();
+    wsRef.current.connect(
+      (progress) => {
+        onProgressData(progress);
+      },
+      (complete) => {
+        onProgressData(null);
+        setRefreshingPlaylist(null);
+        onShowOverlay(false);
+        
+        // Show completion message
+        const message = complete.added !== undefined && complete.removed !== undefined
+          ? `Playlist refreshed: ${complete.added} songs added, ${complete.removed} songs removed`
+          : complete.message;
+        setRefreshMessage(message);
+        setTimeout(() => setRefreshMessage(null), 4000);
+        
+        // Reload playlists
+        loadPlaylists();
+        wsRef.current.disconnect();
+      }
+    );
+    
     try {
-      const refreshResult = await musicAPI.refreshPlaylist(playlistId);
-      
-      const response = await musicAPI.getPlaylists();
-      setPlaylists({...response.playlists});
-      
-      // Show refresh statistics popup
-      const added = refreshResult.added ?? 0;
-      const removed = refreshResult.removed ?? 0;
-      const message = `Playlist refreshed: ${added} songs added, ${removed} songs removed`;
-      setRefreshMessage(message);
-      setTimeout(() => setRefreshMessage(null), 4000);
-      
-      onShowOverlay(false);
-      setTimeout(() => setRefreshingPlaylist(null), 500);
+      await musicAPI.refreshPlaylist(playlistId);
     } catch (error) {
       console.log('Error refreshing playlist:', error);
       setRefreshingPlaylist(null);
+      onProgressData(null);
       onShowOverlay(false);
+      if (wsRef.current) {
+        wsRef.current.disconnect();
+      }
     }
   };
 
@@ -229,6 +246,8 @@ const PlaylistView = ({ onStatusUpdate, theme, onPlaylistSelect, onShowOverlay }
           {refreshMessage}
         </div>
       )}
+      
+
       <div style={{ padding: '30px' }}>
       {/* Playlists List */}
       <div style={{ marginBottom: '40px' }}>

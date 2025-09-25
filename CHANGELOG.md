@@ -2,6 +2,36 @@
 
 All notable changes to SVARA Music Player will be documented in this file.
 
+## [1.5.0](https://github.com/Swapnanilb/Svara/releases/tag/v1.5.0) - 2025-09-25
+
+### 🚀 Real-Time Progress Tracking
+- **WebSocket Integration**: Added real-time progress updates during playlist processing
+- **Live Progress Bar**: Shows "Processing X/Y songs" with current song title
+- **Background Processing**: Continue using app while songs load in background
+- **Tab-Friendly Loading**: Loading overlay only in Home view, free navigation between tabs
+- **Progress Persistence**: Switch tabs and return to see current progress
+
+### 🔧 Technical Improvements
+- **WebSocket Server**: Added `/ws` endpoint for bi-directional communication
+- **ProgressWebSocket Class**: Frontend WebSocket client for real-time updates
+- **Enhanced YouTube Controller**: Progress callbacks with thread-safe event loops
+- **Global State Management**: Loading state persists across navigation
+- **Improved yt-dlp**: Updated to latest version with better format handling
+
+### 🎨 UI/UX Enhancements
+- **Smart Loading Dialog**: Centered positioning for both light and dark themes
+- **Non-Blocking Interface**: Access all tabs while content loads
+- **Visual Progress Feedback**: Real-time song processing updates
+- **Consistent Theming**: Fixed loading dialog styling across themes
+- **Input Visibility**: Improved text contrast in input fields
+
+### 🐛 Bug Fixes
+- Fixed loading state disappearing when switching tabs
+- Resolved asyncio event loop errors in background threads
+- Fixed dialog centering issues in different themes
+- Improved input text visibility in light mode
+- Enhanced WebSocket connection stability
+
 ## [1.0.0](https://github.com/Swapnanilb/Svara/releases/tag/v1.0.0) - 2025-09-20
 
 ### 🛠️ Technical Architecture Transformation

@@ -16,6 +16,9 @@ function App() {
     return localStorage.getItem('theme') || 'light';
   });
   const [showRefreshOverlay, setShowRefreshOverlay] = useState(false);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalLoadingMessage, setGlobalLoadingMessage] = useState('');
+  const [progressData, setProgressData] = useState(null);
 
   useEffect(() => {
     updateStatus();
@@ -97,8 +100,8 @@ function App() {
       {/* Main Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <div className={theme === 'dark' ? 'dark-glass' : 'glass'} style={{ flex: 1, overflow: 'auto', borderRadius: '20px', marginBottom: '20px' }}>
-          {currentView === 'home' && <HomeView onStatusUpdate={updateStatus} theme={theme} />}
-          {currentView === 'playlists' && <PlaylistView onStatusUpdate={updateStatus} theme={theme} onPlaylistSelect={() => setCurrentView('songs')} onShowOverlay={setShowRefreshOverlay} />}
+          {currentView === 'home' && <HomeView onStatusUpdate={updateStatus} theme={theme} globalLoading={globalLoading} globalLoadingMessage={globalLoadingMessage} progressData={progressData} onGlobalLoading={setGlobalLoading} onGlobalLoadingMessage={setGlobalLoadingMessage} onProgressData={setProgressData} />}
+          {currentView === 'playlists' && <PlaylistView onStatusUpdate={updateStatus} theme={theme} onPlaylistSelect={() => setCurrentView('songs')} onShowOverlay={setShowRefreshOverlay} onGlobalLoading={setGlobalLoading} onProgressData={setProgressData} />}
           {currentView === 'songs' && <SongsView status={status} onStatusUpdate={updateStatus} theme={theme} />}
           {currentView === 'settings' && <SettingsView theme={theme} onThemeChange={setTheme} />}
         </div>
