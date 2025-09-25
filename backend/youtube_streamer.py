@@ -20,12 +20,11 @@ class YouTubeStreamer:
         self.metadata_cache_file = "song_metadata_cache.json"
         self.metadata_cache = self._load_metadata_cache()
         self.ydl_opts = {
-            'format': 'bestaudio/best',
             'quiet': True,
             'no_warnings': True,
-            'extract_flat': 'in_playlist',  # keep flat for fast playlist info
+            'extract_flat': 'in_playlist',
             'nocheckcertificate': True,
-            'ignoreerrors': True,
+            'ignoreerrors': True
         }
 
     def get_playlist_info(self, url, existing_ids=None):
@@ -108,8 +107,13 @@ class YouTubeStreamer:
         print(f"[YouTubeStreamer] No cache found, fetching from YouTube...")
         full_song_info = {}
         try:
-            opts = self.ydl_opts.copy()
-            opts.pop('extract_flat', None)
+            # Try metadata-only extraction first
+            opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'skip_download': True,
+                'extract_flat': False
+            }
 
             with yt.YoutubeDL(opts) as ydl:
                 print(f"[YouTubeStreamer] Calling yt-dlp extract_info...")
@@ -119,7 +123,7 @@ class YouTubeStreamer:
                 if info_dict:
                     full_song_info = {
                         "title": info_dict.get('title', 'Unknown Title'),
-                        "id": info_dict.get('id', 'Unknown ID'),
+                        "id": info_dict.get('id', video_id),
                         "duration": info_dict.get('duration', 0),
                         "thumbnail_url": info_dict.get('thumbnail')
                     }
@@ -132,8 +136,24 @@ class YouTubeStreamer:
 
         except yt.DownloadError as e:
             print(f"[YouTubeStreamer] yt-dlp DownloadError: {e}")
+            # Fallback: create basic info from URL
+            if video_id:
+                full_song_info = {
+                    "title": f"Video {video_id}",
+                    "id": video_id,
+                    "duration": 0,
+                    "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+                }
         except Exception as e:
             print(f"[YouTubeStreamer] Unexpected error: {e}")
+            # Fallback: create basic info from URL
+            if video_id:
+                full_song_info = {
+                    "title": f"Video {video_id}",
+                    "id": video_id,
+                    "duration": 0,
+                    "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+                }
 
         print(f"[YouTubeStreamer] Final result: {full_song_info}")
         return full_song_info
